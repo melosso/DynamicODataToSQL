@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
+using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
 
 using SqlKata;
@@ -16,7 +17,7 @@ using SqlKata;
 /// Initializes a new instance of the <see cref="FilterClauseBuilder"/> class.
 /// </remarks>
 /// <param name="query">query.</param>
-public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeVisitor<Query>
+public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameResolver columnNameResolver) : QueryNodeVisitor<Query>
 {
     private const DateTimeStyles DATETIMESTYLES = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces;
     private Query _query = query;
@@ -30,7 +31,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
             throw new NotSupportedException("Non constant collection nodes are not supported by 'in' logical operator");
         }
 
-        var leftColumnName = GetColumnName(nodeIn.Left);
+        var leftColumnName = columnNameResolver.GetColumnName(nodeIn.Left);
         var rightValues = GetCollectionConstantValues(nodeIn.Right as CollectionConstantNode);
 
         return _query.WhereIn(leftColumnName, rightValues);
@@ -56,13 +57,14 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
             case BinaryOperatorKind.And:
                 _query = _query.Where(q =>
                 {
-                    var lb = new FilterClauseBuilder(q, _tryToParseDates);
+                    var lb = new FilterClauseBuilder(q, _tryToParseDates, columnNameResolver);
                     var lq = left.Accept(lb);
                     if (nodeIn.OperatorKind == BinaryOperatorKind.Or)
                     {
                         lq = lq.Or();
                     }
-                    var rb = new FilterClauseBuilder(lq, _tryToParseDates);
+
+                    var rb = new FilterClauseBuilder(lq, _tryToParseDates, columnNameResolver);
                     return right.Accept(rb);
                 });
                 break;
@@ -78,7 +80,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
                 {
                     _query = _query.Where(q =>
                     {
-                        var lb = new FilterClauseBuilder(q, _tryToParseDates);
+                        var lb = new FilterClauseBuilder(q, _tryToParseDates, columnNameResolver);
                         return left.Accept(lb);
                     });
                     left = (left as UnaryOperatorNode).Operand;
@@ -93,7 +95,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
                     }
                     else
                     {
-                        var column = GetColumnName(left);
+                        var column = columnNameResolver.GetColumnName(left);
                         _query = _query.Where(column, op, value);
                     }
                 }
@@ -120,15 +122,12 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
     /// <inheritdoc/>
     public override Query Visit(SingleValueFunctionCallNode nodeIn)
     {
-        if (nodeIn is null)
-        {
-            throw new ArgumentNullException(nameof(nodeIn));
-        }
+        ArgumentNullException.ThrowIfNull(nodeIn);
 
         var nodes = nodeIn.Parameters.ToArray();
 
         var caseSensitive = true;
-        var columnName = GetColumnName(nodes[0]);
+        var columnName = columnNameResolver.GetColumnName(nodes[0]);
 
         // managing case where there is toupper or tolower function call inside first parameter
         (caseSensitive, columnName) = GetInnerFunctionCallParameterColumn(nodes, caseSensitive, columnName);
@@ -153,9 +152,9 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
                     value = value.Replace("%5E", "");
                 }
 
-                if (value[value.Length - 1] == '$')
+                if (value[^1] == '$')
                 {
-                    value = value.Substring(0, value.Length - 1);
+                    value = value[..^1];
                 }
 
                 return _query.WhereLike(columnName, value, caseSensitive);
@@ -188,7 +187,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
 
     private Query ApplyFunction(Query query, SingleValueFunctionCallNode leftNode, string operand, object rightValue)
     {
-        var columnName = GetColumnName(leftNode.Parameters.FirstOrDefault());
+        var columnName = columnNameResolver.GetColumnName(leftNode.Parameters.FirstOrDefault());
         switch (leftNode.Name.ToUpperInvariant())
         {
             case "YEAR":
@@ -199,10 +198,10 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
                 query = query.WhereDatePart(leftNode.Name, columnName, operand, rightValue);
                 break;
             case "DATE":
-                query = query.WhereDate(columnName, operand, rightValue is DateTime date ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture.DateTimeFormat) : rightValue);
+                query = query.WhereDate(columnName, operand, rightValue);
                 break;
             case "TIME":
-                query = query.WhereTime(columnName, operand, rightValue is DateTime time ? time.ToString("HH:mm", CultureInfo.InvariantCulture.DateTimeFormat) : rightValue);
+                query = query.WhereTime(columnName, operand, rightValue);
                 break;
             case "TOUPPER":
             case "TOLOWER":
@@ -230,7 +229,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
         return query;
     }
 
-    private static (bool CaseSensitive, string ColumnName) GetInnerFunctionCallParameterColumn(QueryNode[] nodes, bool caseSensitive, string columnName)
+    private (bool CaseSensitive, string ColumnName) GetInnerFunctionCallParameterColumn(QueryNode[] nodes, bool caseSensitive, string columnName)
     {
         if (nodes[0].Kind == QueryNodeKind.Convert)
         {
@@ -248,7 +247,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
         return (caseSensitive, columnName);
     }
 
-    private static (bool CaseSensitive, string ColumnName) GetFunctionCallParameterInfo(bool caseSensitive, string columnName, SingleValueFunctionCallNode paramNode)
+    private (bool CaseSensitive, string ColumnName) GetFunctionCallParameterInfo(bool caseSensitive, string columnName, SingleValueFunctionCallNode paramNode)
     {
         var functionNode = paramNode;
 
@@ -256,7 +255,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
         if (functionName is "TOUPPER" or "TOLOWER")
         {
             caseSensitive = false;
-            columnName = GetColumnName(functionNode.Parameters.FirstOrDefault());
+            columnName = columnNameResolver.GetColumnName(functionNode.Parameters.FirstOrDefault());
         }
 
         return (caseSensitive, columnName);
@@ -276,27 +275,6 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
         }
     }
 
-    private static string GetColumnName(QueryNode node)
-    {
-        var column = string.Empty;
-        if (node.Kind == QueryNodeKind.Convert)
-        {
-            node = (node as ConvertNode).Source;
-        }
-
-        if (node.Kind == QueryNodeKind.SingleValuePropertyAccess)
-        {
-            column = (node as SingleValuePropertyAccessNode).Property.Name.Trim();
-        }
-
-        if (node.Kind == QueryNodeKind.SingleValueOpenPropertyAccess)
-        {
-            column = (node as SingleValueOpenPropertyAccessNode).Name.Trim();
-        }
-
-        return column.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
-    }
-
     private object GetConstantValue(QueryNode node)
     {
         if (node.Kind == QueryNodeKind.Convert)
@@ -308,7 +286,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
             var value = (node as ConstantNode).Value;
             if (value is string)
             {
-                var trimedValue = value.ToString().Trim();
+                var trimedValue = value.ToString();
                 if (_tryToParseDates && ConvertToDateTimeUTC(trimedValue, out var dateTime))
                 {
                     return dateTime.Value;
@@ -316,8 +294,20 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
 
                 return trimedValue;
             }
-
-            return value;
+            else if (value is Date date)
+            {
+                DateTime converted = date;
+                return converted;
+            }
+            else if (value is TimeOfDay timeOfDay)
+            {
+                TimeSpan converted = timeOfDay;
+                return converted;
+            }
+            else
+            {
+                return value;
+            }
         }
         else if (node.Kind == QueryNodeKind.CollectionConstant)
         {
@@ -327,7 +317,25 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates) : QueryNodeV
         return null;
     }
 
-    private IEnumerable<object> GetCollectionConstantValues(CollectionConstantNode node) => node.Collection.Select(GetConstantValue);
+    private IEnumerable<object> GetCollectionConstantValues(CollectionConstantNode node) =>
+        node.Collection.Select(n =>
+        {
+            // The OData library parser will take empty strings and replace them with quoted text strings, specifically
+            // in collection filter clauses:
+            // eg. $filter=Name in ('', 'Value')
+            // That means that you can never check for a text value in a collection where the collection should include
+            // an empty string, unless you special case it here. This does not seem to be an issue for general filters:
+            // eg. $filter=Name eq ''
+            // So we can focus this workaround to just processing collection constant values.
+            if (n.Kind == QueryNodeKind.Constant && n.Value is string nodeValue && nodeValue == @"""""")
+            {
+                return string.Empty;
+            }
+            else
+            {
+                return GetConstantValue(n);
+            }
+        });
 
     private static string GetOperatorString(BinaryOperatorKind operatorKind) => operatorKind switch
     {

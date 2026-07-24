@@ -48,7 +48,6 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
 
     public static IEnumerable<object[]> GetTestData()
     {
-
         // Test 1
         {
             var testName = "Select+Filter+Sort+Pagination";
@@ -62,7 +61,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"top", "20" },
                 {"skip", "5" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE [Name] like @p0 ORDER BY [Id] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE [Products].[Name] like @p0 ORDER BY [Products].[Id] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"},
@@ -84,7 +83,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"top", "20" },
                 {"skip", "5"},
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] ORDER BY [Id] DESC OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] ORDER BY [Products].[Id] DESC OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", (long)5 },
@@ -105,7 +104,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"top", "20" },
                 {"skip", "0" },
             };
-            var expectedSQL = @"SELECT * FROM [Products] WHERE [Name] like @p0 ORDER BY [Id] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[Name] like @p0 ORDER BY [Products].[Id] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"},
@@ -125,7 +124,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "contains(Name,'Tea')" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE [Name] like @p0";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE [Products].[Name] like @p0";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"}
@@ -144,7 +143,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"filter", "contains(Name,'Tea') or (TotalInventory ge 100 and TotalInventory le 1000) or (TimeCreated gt 2020-06-01T00:00-04:00 and TimeCreated lt 2020-07-01T00:00-04:00) or not (Origin eq 'Canada' or Origin eq 'USA')" },
                 {"orderby", "Id desc" }
             };
-            var expectedSQL = @"SELECT * FROM [Products] WHERE ((([Name] like @p0 OR ([TotalInventory] >= @p1 AND [TotalInventory] <= @p2)) OR ([TimeCreated] > @p3 AND [TimeCreated] < @p4)) OR NOT ([Origin] = @p5 OR [Origin] = @p6)) ORDER BY [Id] DESC";
+            var expectedSQL = @"SELECT * FROM [Products] WHERE ((([Products].[Name] like @p0 OR ([Products].[TotalInventory] >= @p1 AND [Products].[TotalInventory] <= @p2)) OR ([Products].[TimeCreated] > @p3 AND [Products].[TimeCreated] < @p4)) OR NOT ([Products].[Origin] = @p5 OR [Products].[Origin] = @p6)) ORDER BY [Products].[Id] DESC";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"},
@@ -241,7 +240,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"filter","year(OrderDate) eq 1971" }
             };
-            var expectedSQL = @"SELECT * FROM [Orders] WHERE DATEPART(YEAR, [OrderDate]) = @p0";
+            var expectedSQL = @"SELECT * FROM [Orders] WHERE DATEPART(YEAR, [Orders].[OrderDate]) = @p0";
             var expectedSQLParams = new Dictionary<string, object> { { "@p0", 1971 } };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -255,8 +254,8 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"filter","date(OrderDate) gt 2001-01-17" }
             };
-            var expectedSQL = @"SELECT * FROM [Orders] WHERE CAST([OrderDate] as DATE) > @p0";
-            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new Microsoft.OData.Edm.Date(2001, 1, 17) } };
+            var expectedSQL = @"SELECT * FROM [Orders] WHERE CAST([Orders].[OrderDate] as DATE) > @p0";
+            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new DateTime(2001, 1, 17) } };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
@@ -269,8 +268,8 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"filter","time(OrderDate) gt 16:30" }
             };
-            var expectedSQL = @"SELECT * FROM [Orders] WHERE CAST([OrderDate] as TIME) > @p0";
-            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new Microsoft.OData.Edm.TimeOfDay(16, 30, 0, 0) } };
+            var expectedSQL = @"SELECT * FROM [Orders] WHERE CAST([Orders].[OrderDate] as TIME) > @p0";
+            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new TimeSpan(0, 16, 30, 0, 0) } };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
         // Test 14
@@ -283,7 +282,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "toupper(Name) eq 'Tea'" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE LOWER([Name]) LIKE @p0";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE LOWER([Products].[Name]) LIKE @p0";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "tea"}
@@ -300,7 +299,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "contains(toupper(Name),'Tea')" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE LOWER([Name]) like @p0";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE LOWER([Products].[Name]) like @p0";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%tea%"}
@@ -332,7 +331,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "Name eq '2022-11-30'" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE [Name] = @p0";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE [Products].[Name] = @p0";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "2022-11-30"}
@@ -349,7 +348,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "indexof(Name,'Tea') eq -1" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE  NOT ([Name] like @p0)";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE  NOT ([Products].[Name] like @p0)";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"}
@@ -366,7 +365,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "indexof(toupper(Name),'Tea') eq -1" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE  NOT (LOWER([Name]) like @p0)";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE  NOT (LOWER([Products].[Name]) like @p0)";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%tea%"}
@@ -383,7 +382,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"select", "Name, Type" },
                 {"filter", "indexof(toupper(Name),'Tea') eq 1" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE LOWER([Name]) like @p0";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE LOWER([Products].[Name]) like @p0";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%tea%"}
@@ -403,7 +402,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"top", "20" },
                 {"skip", "5" },
             };
-            var expectedSQL = @"SELECT [Name], [Type], [Spaced Column] FROM [Products] WHERE [Spaced Column] like @p0 ORDER BY [Spaced Column] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type], [Products].[Spaced Column] FROM [Products] WHERE [Products].[Spaced Column] like @p0 ORDER BY [Products].[Spaced Column] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"},
@@ -421,7 +420,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"filter", "Name in ('John', 'Doe')" }
             };
-            var expectedSQL = @"SELECT * FROM [Products] WHERE [Name] IN (@p0, @p1)";
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[Name] IN (@p0, @p1)";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "John"},
@@ -438,7 +437,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"filter", "OrderId in (2, 4, 8, 16)" }
             };
-            var expectedSQL = @"SELECT * FROM [Orders] WHERE [OrderId] IN (@p0, @p1, @p2, @p3)";
+            var expectedSQL = @"SELECT * FROM [Orders] WHERE [Orders].[OrderId] IN (@p0, @p1, @p2, @p3)";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", 2},
@@ -458,7 +457,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"filter", "contains(Name,'Tea') or (TotalInventory ge 100 and TotalInventory le 1000) or (TimeCreated gt 2020-06-01T00:00-04:00 and TimeCreated lt 2020-07-01T00:00-04:00) or not (Origin in ('Canada', 'USA'))" },
                 {"orderby", "Id desc" }
             };
-            var expectedSQL = @"SELECT * FROM [Products] WHERE ((([Name] like @p0 OR ([TotalInventory] >= @p1 AND [TotalInventory] <= @p2)) OR ([TimeCreated] > @p3 AND [TimeCreated] < @p4)) OR [Origin] NOT IN (@p5, @p6)) ORDER BY [Id] DESC";
+            var expectedSQL = @"SELECT * FROM [Products] WHERE ((([Products].[Name] like @p0 OR ([Products].[TotalInventory] >= @p1 AND [Products].[TotalInventory] <= @p2)) OR ([Products].[TimeCreated] > @p3 AND [Products].[TimeCreated] < @p4)) OR [Products].[Origin] NOT IN (@p5, @p6)) ORDER BY [Products].[Id] DESC";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", "%Tea%"},
@@ -485,7 +484,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
                 {"top", "20" },
                 {"skip", "5" },
             };
-            var expectedSQL = @"SELECT [Name], [Type] FROM [Products] WHERE [Name] like @p0 ORDER BY [Name] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
+            var expectedSQL = @"SELECT [Products].[Name], [Products].[Type] FROM [Products] WHERE [Products].[Name] like @p0 ORDER BY [Products].[Name] DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY";
             var expectedSQLParams = new Dictionary<string, object>
             {
                 {"@p0", $"{pattern.Replace(".*", "%")}"},
@@ -494,6 +493,107 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
+        // Test 25
+        {
+            var testName = "Select+Filter+NavigationProperty";
+            var tableName = "Orders";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "OrderId, Amount" },
+                {"filter", "Product/Id eq 1" },
+            };
+            var expectedSQL = @"SELECT [Orders].[OrderId], [Orders].[Amount] FROM [Orders] 
+INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId]) WHERE [Product].[Id] = @p0";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", 1}
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 26
+        {
+            var testName = "Select+Filter+NavigationPropertyFunction";
+            var tableName = "Orders";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "OrderId, Amount" },
+                {"filter", "contains(Product/Name, 'a')" },
+            };
+            var expectedSQL = @"SELECT [Orders].[OrderId], [Orders].[Amount] FROM [Orders] 
+INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId]) WHERE [Product].[Name] LIKE @p0";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "%a%"}
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 27
+        {
+            var testName = "Filter+WhitespaceHandling";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "Name in ('', '\"\"', '''', 'Value', ' ', '   ')" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[Name] IN (@p0, @p1, @p2, @p3, @p4)";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", ""},
+                {"@p1", "'"},
+                {"@p2", "Value"},
+                {"@p3", " "},
+                {"@p4", "   "},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 28
+        {
+            var testName = "Expand+NavigationPropertyFunction";
+            var tableName = "Orders";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "OrderId, Amount" },
+                {"expand", "Product($select=Name)" },
+            };
+            var expectedSQL = @"SELECT [Product].[Name] AS [Product.Name], [Orders].[OrderId], [Orders].[Amount] FROM [Orders] 
+INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
+            var expectedSQLParams = new Dictionary<string, object>();
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 29
+        {
+            var testName = "Expand+All+NavigationPropertyFunction";
+            var tableName = "Orders";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "OrderId, Amount" },
+                {"expand", "Product" },
+            };
+            var expectedSQL = @"SELECT [Product].[Id] AS [Product.Id], [Product].[Name] AS [Product.Name], [Product].[Type] AS [Product.Type], [Product].[TotalInventory] AS [Product.TotalInventory], [Product].[TimeCreated] AS [Product.TimeCreated], [Product].[Origin] AS [Product.Origin], [Product].[Spaced Column] AS [Product.Spaced Column], [Orders].[OrderId], [Orders].[Amount] FROM [Orders] 
+INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
+            var expectedSQLParams = new Dictionary<string, object>();
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 29
+        {
+            var testName = "Expand+NoSelect+NavigationPropertyFunction";
+            var tableName = "Orders";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"expand", "Product" },
+            };
+            var expectedSQL = @"SELECT [Orders].[OrderId], [Orders].[TotalAmount], [Orders].[Country], [Orders].[Amount], [Orders].[OrderDate], [Orders].[value], [Orders].[ProductId], [Product].[Id] AS [Product.Id], [Product].[Name] AS [Product.Name], [Product].[Type] AS [Product.Type], [Product].[TotalInventory] AS [Product.TotalInventory], [Product].[TimeCreated] AS [Product.TimeCreated], [Product].[Origin] AS [Product.Origin], [Product].[Spaced Column] AS [Product.Spaced Column] FROM [Orders] 
+INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
+            var expectedSQLParams = new Dictionary<string, object>();
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new TestsEdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });

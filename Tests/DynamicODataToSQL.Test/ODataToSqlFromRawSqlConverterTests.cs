@@ -253,10 +253,10 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             var tryToParseDates = true;
             var odataQueryParams = new Dictionary<string, string>
             {
-                {"filter","date(OrderDate) gt '2001-01-17'" }
+                {"filter","date(OrderDate) gt 2001-01-17" }
             };
             var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT * FROM [RawSql] WHERE CAST([OrderDate] as date) > @p0";
-            var expectedSQLParams = new Dictionary<string, object> { { "@p0", "2001-01-17" } };
+            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new DateTime(2001, 1, 17) } };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
@@ -267,10 +267,10 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             var tryToParseDates = true;
             var odataQueryParams = new Dictionary<string, string>
             {
-                {"filter","time(OrderDate) gt '16:30'" }
+                {"filter","time(OrderDate) gt 16:30" }
             };
             var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT * FROM [RawSql] WHERE CAST([OrderDate] as time) > @p0";
-            var expectedSQLParams = new Dictionary<string, object> { { "@p0", "16:30" } };
+            var expectedSQLParams = new Dictionary<string, object> { { "@p0", new TimeSpan(0, 16, 30, 0, 0) } };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
         // Test 14

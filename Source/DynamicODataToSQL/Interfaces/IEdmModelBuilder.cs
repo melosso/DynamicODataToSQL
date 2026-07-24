@@ -13,5 +13,5 @@ public interface IEdmModelBuilder
     /// </summary>
     /// <param name="tableName">tableName.</param>
     /// <returns>Tuple.</returns>
-    (IEdmModel, IEdmEntityType, IEdmEntitySet) BuildTableModel(string tableName);
+    public (IEdmModel, IEdmEntityType, IEdmEntitySet) BuildTableModel(string tableName);
 }

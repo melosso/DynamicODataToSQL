@@ -16,7 +16,7 @@ using SqlKata.Compilers;
 /// Initializes a new instance of the <see cref="ApplyClauseBuilder"/> class.
 /// </remarks>
 /// <param name="compiler">sqlCompiler.</param>
-public class ApplyClauseBuilder(Compiler compiler)
+public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnNameResolver)
 {
     private readonly Compiler _compiler = compiler;
 
@@ -28,15 +28,9 @@ public class ApplyClauseBuilder(Compiler compiler)
     /// <returns></returns>
     public Query BuildApplyClause(Query queryIn, ApplyClause applyClause, bool tryToParseDates)
     {
-        if (queryIn is null)
-        {
-            throw new ArgumentNullException(nameof(queryIn));
-        }
+        ArgumentNullException.ThrowIfNull(queryIn);
 
-        if (applyClause is null)
-        {
-            throw new ArgumentNullException(nameof(applyClause));
-        }
+        ArgumentNullException.ThrowIfNull(applyClause);
 
         var i = 0;
         foreach (var node in applyClause.Transformations)
@@ -88,9 +82,9 @@ public class ApplyClauseBuilder(Compiler compiler)
             {
                 queryIn = expr.Method switch
                 {
-                    AggregationMethod.Sum or AggregationMethod.Min or AggregationMethod.Max => queryIn.SelectRaw($"{expr.Method:g}({GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
-                    AggregationMethod.Average => queryIn.SelectRaw($"AVG({GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
-                    AggregationMethod.CountDistinct => queryIn.SelectRaw($"COUNT(DISTINCT {GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
+                    AggregationMethod.Sum or AggregationMethod.Min or AggregationMethod.Max => queryIn.SelectRaw($"{expr.Method:g}({columnNameResolver.GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
+                    AggregationMethod.Average => queryIn.SelectRaw($"AVG({columnNameResolver.GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
+                    AggregationMethod.CountDistinct => queryIn.SelectRaw($"COUNT(DISTINCT {columnNameResolver.GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
                     AggregationMethod.VirtualPropertyCount => queryIn.SelectRaw($"COUNT(1) AS {_compiler.WrapValue(expr.Alias)}"),
                     AggregationMethod.Custom => throw new NotImplementedException(),
                     _ => throw new NotSupportedException($"Aggregate method {expr.Method:g} not supported"),
@@ -106,7 +100,7 @@ public class ApplyClauseBuilder(Compiler compiler)
     {
         foreach (var groupByProperty in nodeIn.GroupingProperties)
         {
-            var columnName = GetColumnName(groupByProperty.Expression);
+            var columnName = columnNameResolver.GetColumnName(groupByProperty.Expression);
             queryIn = queryIn.Select(columnName).GroupBy(columnName);
         }
 
@@ -133,7 +127,7 @@ public class ApplyClauseBuilder(Compiler compiler)
                     case "HOUR":
                     case "MINUTE":
                         var pr = se.Parameters.Single();
-                        var columnName = GetColumnName(pr);
+                        var columnName = columnNameResolver.GetColumnName(pr);
                         queryIn = queryIn.SelectRaw($"{se.Name}({columnName}) as {computeExpression.Alias}");
                         break;
                     default:
@@ -150,40 +144,10 @@ public class ApplyClauseBuilder(Compiler compiler)
         return queryIn;
     }
 
-    private static Query Visit(Query queryIn, FilterTransformationNode nodeIn, bool tryToParseDates)
+    private Query Visit(Query queryIn, FilterTransformationNode nodeIn, bool tryToParseDates)
     {
         var filterClause = nodeIn.FilterClause.Expression;
-        var filterClauseBuilder = new FilterClauseBuilder(queryIn, tryToParseDates);
+        var filterClauseBuilder = new FilterClauseBuilder(queryIn, tryToParseDates, columnNameResolver);
         return filterClause.Accept(filterClauseBuilder);
-    }
-    /// <summary>
-    ///
-    /// </summary>
-    /// <param name="node"></param>
-    /// <param name="wrap">if true returned value will be wrapped in opening and closing column identifier</param>
-    /// <returns></returns>
-    private string GetColumnName(QueryNode node, bool wrap = false)
-    {
-        var column = string.Empty;
-        if (node.Kind == QueryNodeKind.Convert)
-        {
-            node = (node as ConvertNode).Source;
-        }
-
-        if (node.Kind == QueryNodeKind.SingleValuePropertyAccess)
-        {
-            column = (node as SingleValuePropertyAccessNode).Property.Name.Trim();
-        }
-
-        if (node.Kind == QueryNodeKind.SingleValueOpenPropertyAccess)
-        {
-            column = (node as SingleValueOpenPropertyAccessNode).Name.Trim();
-        }
-        if (wrap)
-        {
-            return _compiler.WrapValue(column).Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
-        }
-
-        return column.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
     }
 }

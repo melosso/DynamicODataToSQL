@@ -1,4 +1,5 @@
 namespace DynamicODataSampleService;
+
 using DynamicODataToSQL;
 using DynamicODataToSQL.Interfaces;
 

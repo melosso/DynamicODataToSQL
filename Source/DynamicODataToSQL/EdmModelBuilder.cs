@@ -28,10 +28,16 @@ public class EdmModelBuilder : IEdmModelBuilder
         model.AddElement(defaultContainer);
         var entitySet = defaultContainer.AddEntitySet(tableName, entityType);
 
+        AddNavigationProperties(entityType, model);
+
         return (model, entityType, entitySet);
     }
 
     protected virtual void AddProperties(EdmEntityType entityType)
+    {
+    }
+
+    protected virtual void AddNavigationProperties(EdmEntityType rootType, EdmModel edmModel)
     {
     }
 }

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 
 using DynamicODataToSQL.Interfaces;
 
+using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
 
 using SqlKata;
@@ -71,7 +72,7 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
 
         var tableName = "RawSql";
         var query = new Query(tableName);
-        query = BuildSqlKataQueryFromOdataParameters(query, tableName, odataQuery, count, tryToParseDates);
+        query = BuildSqlKataQueryFromOdataParameters(query, tableName, odataQuery, count, tryToParseDates, false);
 
         query.WithRaw(tableName, rawSql);
 
@@ -91,12 +92,12 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
 
         var query = new Query(tableName);
 
-        return BuildSqlKataQueryFromOdataParameters(query, tableName, odataQuery, count, tryToParseDates);
+        return BuildSqlKataQueryFromOdataParameters(query, tableName, odataQuery, count, tryToParseDates, true);
     }
 
-    private Query BuildSqlKataQueryFromOdataParameters(Query query, string modelName, IDictionary<string, string> odataQuery, bool count, bool tryToParseDates)
+    private Query BuildSqlKataQueryFromOdataParameters(Query query, string modelName, IDictionary<string, string> odataQuery, bool count, bool tryToParseDates, bool allowNavigationProperties)
     {
-        var parser = GetParser(modelName, odataQuery);
+        var (parser, model) = GetParser(modelName, odataQuery);
 
         var applyClause = parser.ParseApply();
         var filterClause = parser.ParseFilter();
@@ -105,9 +106,12 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
         var orderbyClause = parser.ParseOrderBy();
         var selectClause = parser.ParseSelectAndExpand();
 
+        var useNamespacing = allowNavigationProperties && applyClause == null;
+        var columnNameResolver = new ColumnNameResolver(_sqlCompiler, modelName, model, useNamespacing);
+
         if (applyClause != null)
         {
-            query = new ApplyClauseBuilder(_sqlCompiler).BuildApplyClause(query, applyClause, tryToParseDates);
+            query = new ApplyClauseBuilder(_sqlCompiler, columnNameResolver).BuildApplyClause(query, applyClause, tryToParseDates);
             if (filterClause != null || selectClause != null)
             {
                 query = new Query().From(query, "apply");
@@ -116,12 +120,14 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
 
         if (filterClause != null)
         {
-            query = filterClause.Expression.Accept(new FilterClauseBuilder(query, tryToParseDates));
+            query = filterClause.Expression.Accept(new FilterClauseBuilder(query, tryToParseDates, columnNameResolver));
         }
 
         if (count)
         {
             query = query.AsCount();
+
+            query = new JoinClauseBuilder(columnNameResolver.NavigationProperties).BuildJoinClause(query, model, modelName);
         }
         else
         {
@@ -137,18 +143,20 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
 
             if (orderbyClause != null)
             {
-                query = BuildOrderByClause(query, orderbyClause);
+                query = BuildOrderByClause(query, orderbyClause, columnNameResolver);
             }
 
             if (selectClause != null)
             {
-                query = BuildSelectClause(query, selectClause);
+                query = BuildSelectClause(query, selectClause, columnNameResolver);
             }
+
+            query = new JoinClauseBuilder(columnNameResolver.NavigationProperties).BuildJoinClause(query, model, modelName);
         }
 
         return query;
     }
-    private ODataQueryOptionParser GetParser(string name, IDictionary<string, string> odataQuery)
+    private (ODataQueryOptionParser, IEdmModel) GetParser(string name, IDictionary<string, string> odataQuery)
     {
         var result = _edmModelBuilder.BuildTableModel(name);
         var model = result.Item1;
@@ -157,7 +165,7 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
         var parser = new ODataQueryOptionParser(model, entityType, entitySet, odataQuery);
         parser.Resolver.EnableCaseInsensitive = true;
         parser.Resolver.EnableNoDollarQueryOptions = true;
-        return parser;
+        return (parser, model);
     }
 
     private (string, IDictionary<string, object>) CompileSqlKataQuery(Query query)
@@ -166,21 +174,21 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
         return (sqlResult.Sql, sqlResult.NamedBindings);
     }
 
-    private static Query BuildOrderByClause(Query query, OrderByClause orderbyClause)
+    private static Query BuildOrderByClause(Query query, OrderByClause orderbyClause, ColumnNameResolver columnNameResolver)
     {
         while (orderbyClause != null)
         {
             var direction = orderbyClause.Direction;
-            var expressionName = GetSingleValuePropertyAccessNodeName(orderbyClause.Expression);
+            var expressionName = columnNameResolver.GetColumnName(orderbyClause.Expression);
             if (expressionName is not null)
             {
                 if (direction == OrderByDirection.Ascending)
                 {
-                    query = query.OrderBy(expressionName.Trim().Replace(SPACESIGNREPLACEMENT, " "));
+                    query = query.OrderBy(expressionName);
                 }
                 else
                 {
-                    query = query.OrderByDesc(expressionName.Trim().Replace(SPACESIGNREPLACEMENT, " "));
+                    query = query.OrderByDesc(expressionName);
                 }
             }
 
@@ -190,30 +198,42 @@ public class ODataToSqlConverter(IEdmModelBuilder edmModelBuilder, Compiler sqlC
         return query;
     }
 
-    private static string GetSingleValuePropertyAccessNodeName(SingleValueNode expression)
+    private static Query BuildSelectClause(Query query, SelectExpandClause selectClause, ColumnNameResolver columnNameResolver)
     {
-        if (expression is SingleValueOpenPropertyAccessNode openProperty)
+        if (selectClause.AllSelected)
         {
-            return openProperty.Name;
-        }
-
-        if (expression is SingleValuePropertyAccessNode property)
-        {
-            return property.Property.Name;
-        }
-
-        return null;
-    }
-
-    private static Query BuildSelectClause(Query query, SelectExpandClause selectClause)
-    {
-        if (!selectClause.AllSelected)
-        {
-            foreach (var selectItem in selectClause.SelectedItems)
+            foreach (var property in columnNameResolver.GetColumnNames())
             {
-                if (selectItem is PathSelectItem path)
+                query = query.Select(property);
+            }
+        }
+        // If AllSelected is true, then only EXPAND clauses will be in this collection so we don't need to worry about duplicate selections.
+        foreach (var selectItem in selectClause.SelectedItems)
+        {
+            if (selectItem is PathSelectItem path)
+            {
+                var property = columnNameResolver.GetColumnName(path.SelectedPath.FirstSegment.Identifier);
+                query = query.Select(property);
+            }
+            else if (selectItem is ExpandedNavigationSelectItem expanded)
+            {
+                if (expanded.SelectAndExpand.AllSelected)
                 {
-                    query = query.Select(path.SelectedPath.FirstSegment.Identifier.Trim().Replace(SPACESIGNREPLACEMENT, " "));
+                    foreach (var property in columnNameResolver.GetColumnNames(expanded.NavigationSource.Name))
+                    {
+                        query = query.Select($"{property} AS {property}");
+                    }
+                }
+                else
+                {
+                    foreach (var expandedSelection in expanded.SelectAndExpand.SelectedItems)
+                    {
+                        if (expandedSelection is PathSelectItem expandedPath)
+                        {
+                            var property = columnNameResolver.GetColumnName(expanded.NavigationSource.Name, expandedPath.SelectedPath.FirstSegment.Identifier);
+                            query = query.Select($"{property} AS {property}");
+                        }
+                    }
                 }
             }
         }
