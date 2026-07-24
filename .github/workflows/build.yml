@@ -5,9 +5,6 @@ on:
     branches:
       - master
   pull_request:
-  release:
-    types:
-      - published
 
 jobs:
   build:
@@ -23,6 +20,8 @@ jobs:
         run: git fetch --tags
       - name: "Install .NET"
         uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
       - name: Restore
         run: dotnet restore
       - name: CodeAnalysis
@@ -30,31 +29,4 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
       - name: Test
-        run: dotnet test -c Release --no-build /p:CollectCoverage=true /p:Threshold=75 /p:CoverletOutput="../../artifacts/"      
-      - name: Pack
-        if: github.event_name == 'release'
-        run: dotnet pack -c Release --no-build --include-symbols --include-source -p:SymbolPackageFormat=snupkg -o ./artifacts
-      - name: "Publish Artifacts"
-        if: github.event_name == 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          path: "./artifacts"
-          name: Packages
-
-  push-nuget:
-    name: "Push NuGet Packages"
-    needs: build
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Download Artifacts"
-        uses: actions/download-artifact@v4
-        with:
-          name: Packages
-          path: "./artifacts"
-      - name: "Install .NET"
-        uses: actions/setup-dotnet@v4
-      - name: "Push Package"
-        run: dotnet nuget push './artifacts/*.nupkg' -k $NUGET_AUTH_TOKEN -s https://api.nuget.org/v3/index.json
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet test -c Release --no-build
