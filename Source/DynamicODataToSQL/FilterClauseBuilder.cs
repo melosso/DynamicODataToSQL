@@ -294,6 +294,9 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
 
                 return trimedValue;
             }
+            // OData 8.x parser still emits Edm.Date/Edm.TimeOfDay for date/time literals
+            // DateOnly/TimeOnly is the ODL 9 replacement, not live yet, so match the current types
+#pragma warning disable CS0618
             else if (value is Date date)
             {
                 DateTime converted = date;
@@ -304,6 +307,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 TimeSpan converted = timeOfDay;
                 return converted;
             }
+#pragma warning restore CS0618
             else
             {
                 return value;

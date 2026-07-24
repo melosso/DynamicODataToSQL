@@ -11,7 +11,7 @@ using SqlKata.Compilers;
 
 public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel model, bool useNamespacing)
 {
-    private IEdmEntityType EntityType { get; } = model.EntityContainer.FindEntitySet(tableName).EntityType();
+    private IEdmEntityType EntityType { get; } = model.EntityContainer.FindEntitySet(tableName).EntityType;
 
     public HashSet<IEdmNavigationProperty> NavigationProperties { get; } = [];
 
