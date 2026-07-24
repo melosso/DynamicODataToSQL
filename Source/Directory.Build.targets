@@ -7,7 +7,7 @@
            multiple NuGet packages in your solution and want to version them separately, then uncomment this line
            and tag your repository with the name of the package followed by the semantic version e.g.
            'PackageName-1.0.0'. -->
-      <!--<MinVerTagPrefix>$(PackageId)-</MinVerTagPrefix>-->
+      <MinVerTagPrefix>v</MinVerTagPrefix>
       <MinVerVerbosity>normal</MinVerVerbosity>
     </PropertyGroup>
   </Target>
