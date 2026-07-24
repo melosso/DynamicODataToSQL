@@ -6,4 +6,4 @@ This project supports only the latest version with security updates. However, we
 
 ## Reporting a Vulnerability
 
-Contact [@vaibhav-goyal] to report a security vulnerability. You will be thanked!
+Contact [@hawkinslabdev] to report a security vulnerability. You will be thanked!

@@ -1,11 +1,15 @@
-# DynamicODataToSQL
+# 🛠️ DynamicODataToSQL
+
+> [!IMPORTANT]  
+> This repository builts on the [original](https://github.com/DynamicODataToSQL/DynamicODataToSQL) NuGet package from >= .NET 10, extending support for the latest dependency updates and `$expand` support.
+
 Dotnet NuGet package to convert OData query to SQL query when the data model is dynamic and 
 hence entity framework or any other ORM with IQuerable support cannot be used.
 In a multi-tenant enterprise or Saas applications, the data model is usually not fixed (dynamic).
 
-[![License](https://img.shields.io/github/license/DynamicODataToSQL/DynamicODataToSQL)](https://github.com/DynamicODataToSQL/DynamicODataToSQL/blob/master/LICENSE)
-[![GitHub Actions Status](https://github.com/DynamicODataToSQL/DynamicODataToSQL/workflows/Build/badge.svg?branch=master)](https://github.com/DynamicODataToSQL/DynamicODataToSQL/actions)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/DynamicOdataToSQL/DynamicOdataToSQL?sort=semver)]()
+[![License](https://img.shields.io/github/license/melosso/DynamicODataToSQL)](https://github.com/melosso/DynamicODataToSQL/blob/master/LICENSE)
+[![GitHub Actions Status](https://github.com/melosso/DynamicODataToSQL/workflows/Build/badge.svg?branch=master)](https://github.com/melosso/DynamicODataToSQL/actions)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/melosso/DynamicODataToSQL?sort=semver)]()
 [![Nuget](https://img.shields.io/nuget/v/DynamicODataToSQL)](https://www.nuget.org/packages/DynamicODataToSQL/)
 
 

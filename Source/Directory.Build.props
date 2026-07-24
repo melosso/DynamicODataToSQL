@@ -7,16 +7,16 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package">
-    <Authors>Vaibhav Goyal</Authors>
-    <Company>Vaibhav Goyal</Company>
-    <Copyright>Copyright © Vaibhav Goyal. All rights Reserved</Copyright>
+    <Authors>Melosso</Authors>
+    <Company>Melosso</Company>
+    <Copyright>Copyright © Vaibhav Goyal, Melosso and contributors.</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/DynamicODataToSQL/DynamicODataToSQL</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/melosso/DynamicODataToSQL</PackageProjectUrl>
     <PackageIcon>Icon.png</PackageIcon>
-    <RepositoryUrl>https://github.com/DynamicODataToSQL/DynamicODataToSQL.git</RepositoryUrl>
+    <RepositoryUrl>https://github.com/melosso/DynamicODataToSQL.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>https://github.com/DynamicODataToSQL/DynamicODataToSQL/releases</PackageReleaseNotes>
+    <PackageReleaseNotes>https://github.com/melosso/DynamicODataToSQL/releases</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup Label="Package References">    
