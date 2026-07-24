@@ -1,18 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup Label="Build">
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Label="Package">
+    <PackageId>Melosso.DynamicODataToSQL</PackageId>
     <Product>DynamicODataToSQL</Product>
-    <Description>DynamicODataToSQL</Description>
-    <PackageTags>odata;sql;dynamic;</PackageTags>
+    <Description>Convert OData query strings into parameterized SQL using SqlKata. Melosso fork adding $expand navigation-property support.</Description>
+    <PackageTags>odata;sql;dynamic;expand;sqlkata;</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.OData.Core" Version="7.21.4" />
-    <PackageReference Include="SqlKata" Version="2.4.0" />
+    <PackageReference Include="SqlKata" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
