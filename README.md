@@ -49,7 +49,7 @@ This project aims to solve this issue by providing a simple API to convert an OD
 
 ## Getting Started
 - Install Nuget Package  
-  `Install-Package DynamicODataToSQL`
+  `Install-Package Melosso.DynamicODataToSQL`
 ```c#
 var converter = new ODataToSqlConverter(new EdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });
 var tableName = "Customers"; 
