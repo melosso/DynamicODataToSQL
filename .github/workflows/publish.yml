@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release without the v prefix (e.g. 1.0.2 or 1.1.0-preview.1)"
+        description: "Version to release (e.g. 1.0.2, v1.0.2 or 1.1.0-preview.1)"
         required: true
 
 jobs:
@@ -33,6 +33,8 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
+          VERSION="${VERSION#v}"  # Accept both 1.0.2 and v1.0.2
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Invalid version: $VERSION"; exit 1; }
           git tag "v$VERSION"  # Local only, so MinVer picks it up; fails if the tag already exists
 
@@ -66,5 +68,4 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
         run: gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes
