@@ -1,8 +1,8 @@
 # DynamicODataToSQL
 
 [![License](https://img.shields.io/github/license/melosso/DynamicODataToSQL)](https://github.com/melosso/DynamicODataToSQL/blob/master/LICENSE)
-[![GitHub Actions Status](https://github.com/melosso/DynamicODataToSQL/workflows/Build/badge.svg?branch=master)](https://github.com/melosso/DynamicODataToSQL/actions)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/melosso/DynamicODataToSQL?sort=semver)]()
+[![Build](https://github.com/melosso/DynamicODataToSQL/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/melosso/DynamicODataToSQL/actions/workflows/build.yml)
+[![Latest tag](https://img.shields.io/github/v/tag/melosso/DynamicODataToSQL?sort=semver)](https://github.com/melosso/DynamicODataToSQL/tags)
 [![Nuget](https://img.shields.io/nuget/v/Melosso.DynamicODataToSQL)](https://www.nuget.org/packages/Melosso.DynamicODataToSQL/)
 
 
