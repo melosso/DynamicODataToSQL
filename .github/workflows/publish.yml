@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'  # v1.0.0, v1.2.3-preview.1, etc. MinVer derives the package version from the tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release without the v prefix (e.g. 1.0.2 or 1.1.0-preview.1)"
+        required: true
 
 jobs:
   publish:
@@ -12,7 +17,7 @@ jobs:
     environment: release
     permissions:
       id-token: write     # Required for OIDC token (NuGet trusted publishing)
-      contents: read
+      contents: write   # Required to create the tag and GitHub release on manual runs
 
     steps:
       - name: "Checkout"
@@ -22,6 +27,14 @@ jobs:
           fetch-depth: 0   # Full history + tags so MinVer can compute the version
       - name: "Git Fetch Tags"
         run: git fetch --tags
+
+      - name: "Tag commit (manual run)"
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Invalid version: $VERSION"; exit 1; }
+          git tag "v$VERSION"  # Local only, so MinVer picks it up; fails if the tag already exists
 
       - name: "Install .NET"
         uses: actions/setup-dotnet@v4
@@ -48,3 +61,10 @@ jobs:
 
       - name: "Push to NuGet"
         run: dotnet nuget push './artifacts/*.nupkg' --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: "Create GitHub release (manual run)"
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes
