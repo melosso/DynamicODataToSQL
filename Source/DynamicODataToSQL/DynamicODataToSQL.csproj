@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.OData.Core" Version="8.4.4" />
+    <PackageReference Include="Microsoft.OData.Core" Version="9.0.0" />
     <PackageReference Include="SqlKata" Version="4.0.1" />
   </ItemGroup>
 

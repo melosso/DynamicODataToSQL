@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
 
 using SqlKata;
@@ -294,20 +293,14 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
 
                 return trimedValue;
             }
-            // OData 8.x parser still emits Edm.Date/Edm.TimeOfDay for date/time literals
-            // DateOnly/TimeOnly is the ODL 9 replacement, not live yet, so match the current types
-#pragma warning disable CS0618
-            else if (value is Date date)
+            else if (value is DateOnly date)
             {
-                DateTime converted = date;
-                return converted;
+                return date.ToDateTime(TimeOnly.MinValue);
             }
-            else if (value is TimeOfDay timeOfDay)
+            else if (value is TimeOnly timeOfDay)
             {
-                TimeSpan converted = timeOfDay;
-                return converted;
+                return timeOfDay.ToTimeSpan();
             }
-#pragma warning restore CS0618
             else
             {
                 return value;
