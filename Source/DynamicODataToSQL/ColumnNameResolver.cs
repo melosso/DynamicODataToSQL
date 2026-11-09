@@ -50,6 +50,11 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
             column = (node as SingleValueOpenPropertyAccessNode).Name.Trim();
         }
 
+        if (column.Length == 0)
+        {
+            throw new NotSupportedException($"Expected a property, found '{node.Kind}'");
+        }
+
         if (wrap)
         {
             table = compiler.WrapValue(table);

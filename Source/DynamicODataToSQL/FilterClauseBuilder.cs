@@ -74,45 +74,29 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             case BinaryOperatorKind.GreaterThanOrEqual:
             case BinaryOperatorKind.LessThan:
             case BinaryOperatorKind.LessThanOrEqual:
-                var op = GetOperatorString(nodeIn.OperatorKind);
-                if (left.Kind == QueryNodeKind.UnaryOperator)
+                var operatorKind = nodeIn.OperatorKind;
+                if (left.Kind == QueryNodeKind.Constant && right.Kind != QueryNodeKind.Constant)
                 {
-                    _query = _query.Where(q =>
-                    {
-                        var lb = new FilterClauseBuilder(q, _tryToParseDates, columnNameResolver);
-                        return left.Accept(lb);
-                    });
-                    left = (left as UnaryOperatorNode).Operand;
+                    (left, right) = (right, left);
+                    operatorKind = Mirror(operatorKind);
                 }
+
+                var op = GetOperatorString(operatorKind);
                 if (right.Kind == QueryNodeKind.Constant)
                 {
                     var value = GetConstantValue(right);
-                    if (left.Kind == QueryNodeKind.SingleValueFunctionCall)
-                    {
-                        var functionNode = left as SingleValueFunctionCallNode;
-                        _query = ApplyFunction(_query, functionNode, op, value);
-                    }
-                    else
-                    {
-                        var column = columnNameResolver.GetColumnName(left);
-                        _query = _query.Where(column, op, value);
-                    }
+                    _query = left.Kind == QueryNodeKind.SingleValueFunctionCall
+                        ? ApplyFunction(_query, (SingleValueFunctionCallNode)left, op, value)
+                        : _query.Where(columnNameResolver.GetColumnName(left), op, value);
+                }
+                else
+                {
+                    _query = _query.WhereColumns(columnNameResolver.GetColumnName(left), op, columnNameResolver.GetColumnName(right));
                 }
                 break;
-            case BinaryOperatorKind.Add:
-                break;
-            case BinaryOperatorKind.Subtract:
-                break;
-            case BinaryOperatorKind.Multiply:
-                break;
-            case BinaryOperatorKind.Divide:
-                break;
-            case BinaryOperatorKind.Modulo:
-                break;
-            case BinaryOperatorKind.Has:
-                break;
+
             default:
-                return _query;
+                throw new NotSupportedException($"Operator '{nodeIn.OperatorKind}' is not supported in $filter");
         }
 
         return _query;
@@ -125,11 +109,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
 
         var nodes = nodeIn.Parameters.ToArray();
 
-        var caseSensitive = true;
-        var columnName = columnNameResolver.GetColumnName(nodes[0]);
-
-        // managing case where there is toupper or tolower function call inside first parameter
-        (caseSensitive, columnName) = GetInnerFunctionCallParameterColumn(nodes, caseSensitive, columnName);
+        var (caseSensitive, columnName) = ResolveFunctionColumn(nodes);
 
         switch (nodeIn.Name.ToLowerInvariant())
         {
@@ -159,7 +139,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 return _query.WhereLike(columnName, value, caseSensitive);
 
             default:
-                return _query;
+                throw new NotSupportedException($"Function '{nodeIn.Name}' is not supported as a $filter predicate");
         }
     }
 
@@ -168,25 +148,24 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
     {
         switch (nodeIn.OperatorKind)
         {
-            case UnaryOperatorKind.Not:
-                _query = _query.Not();
-                if (nodeIn.Operand.Kind is QueryNodeKind.SingleValueFunctionCall
-                    or QueryNodeKind.BinaryOperator
-                    or QueryNodeKind.In)
-                {
-                    return nodeIn.Operand.Accept(this);
-                }
-
-                return _query;
-            case UnaryOperatorKind.Negate:
+            case UnaryOperatorKind.Not when nodeIn.Operand.Kind is QueryNodeKind.SingleValueFunctionCall
+                or QueryNodeKind.BinaryOperator
+                or QueryNodeKind.In:
+                // the operand emits one clause or throws, so the not flag never outlives it
+                var clauses = _query.GetComponents("where").Count;
+                var negated = nodeIn.Operand.Accept(new FilterClauseBuilder(_query.Not(), _tryToParseDates, columnNameResolver));
+                if (negated.GetComponents("where").Count != clauses + 1)
+                    throw new NotSupportedException("The operand of 'not' is not supported in $filter");
+                return _query = negated;
             default:
-                return _query;
+                throw new NotSupportedException($"Operator '{nodeIn.OperatorKind}' is not supported in $filter");
         }
     }
 
     private Query ApplyFunction(Query query, SingleValueFunctionCallNode leftNode, string operand, object rightValue)
     {
-        var columnName = columnNameResolver.GetColumnName(leftNode.Parameters.FirstOrDefault());
+        var nodes = leftNode.Parameters.ToArray();
+        var (caseSensitive, columnName) = ResolveFunctionColumn(nodes);
         switch (leftNode.Name.ToUpperInvariant())
         {
             case "YEAR":
@@ -207,11 +186,6 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 query = query.WhereLike(columnName, rightValue, false);
                 break;
             case "INDEXOF":
-                var nodes = leftNode.Parameters.ToArray();
-                var caseSensitive = true;
-
-                (caseSensitive, columnName) = GetInnerFunctionCallParameterColumn(nodes, caseSensitive, columnName);
-
                 if (rightValue.Equals(-1))
                 {
                     query = query.WhereNotContains(columnName, (string)GetConstantValue(nodes[1]), caseSensitive);
@@ -222,42 +196,19 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 }
                 break;
             default:
-                break;
+                throw new NotSupportedException($"Function '{leftNode.Name}' is not supported in a $filter comparison");
         }
 
         return query;
     }
 
-    private (bool CaseSensitive, string ColumnName) GetInnerFunctionCallParameterColumn(QueryNode[] nodes, bool caseSensitive, string columnName)
+    // tolower or toupper around the first argument makes the match case insensitive
+    private (bool CaseSensitive, string ColumnName) ResolveFunctionColumn(QueryNode[] nodes)
     {
-        if (nodes[0].Kind == QueryNodeKind.Convert)
-        {
-            var paramNode = (nodes[0] as ConvertNode).Source;
-            if (paramNode.Kind == QueryNodeKind.SingleValueFunctionCall)
-            {
-                return GetFunctionCallParameterInfo(caseSensitive, columnName, paramNode as SingleValueFunctionCallNode);
-            }
-        }
-        else if (nodes[0].Kind == QueryNodeKind.SingleValueFunctionCall)
-        {
-            return GetFunctionCallParameterInfo(caseSensitive, columnName, nodes[0] as SingleValueFunctionCallNode);
-        }
-
-        return (caseSensitive, columnName);
-    }
-
-    private (bool CaseSensitive, string ColumnName) GetFunctionCallParameterInfo(bool caseSensitive, string columnName, SingleValueFunctionCallNode paramNode)
-    {
-        var functionNode = paramNode;
-
-        var functionName = functionNode.Name.ToUpperInvariant();
-        if (functionName is "TOUPPER" or "TOLOWER")
-        {
-            caseSensitive = false;
-            columnName = columnNameResolver.GetColumnName(functionNode.Parameters.FirstOrDefault());
-        }
-
-        return (caseSensitive, columnName);
+        var source = nodes[0] is ConvertNode convert ? convert.Source : nodes[0];
+        return source is SingleValueFunctionCallNode inner && inner.Name.ToUpperInvariant() is "TOUPPER" or "TOLOWER"
+            ? (false, columnNameResolver.GetColumnName(inner.Parameters.First()))
+            : (true, columnNameResolver.GetColumnName(nodes[0]));
     }
 
     private static bool ConvertToDateTimeUTC(string dateTimeString, out DateTime? dateTime)
@@ -311,7 +262,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             return GetCollectionConstantValues(node as CollectionConstantNode);
         }
 
-        return null;
+        throw new NotSupportedException("A $filter function argument must be a literal");
     }
 
     private IEnumerable<object> GetCollectionConstantValues(CollectionConstantNode node) =>
@@ -333,6 +284,15 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 return GetConstantValue(n);
             }
         });
+
+    private static BinaryOperatorKind Mirror(BinaryOperatorKind kind) => kind switch
+    {
+        BinaryOperatorKind.GreaterThan => BinaryOperatorKind.LessThan,
+        BinaryOperatorKind.GreaterThanOrEqual => BinaryOperatorKind.LessThanOrEqual,
+        BinaryOperatorKind.LessThan => BinaryOperatorKind.GreaterThan,
+        BinaryOperatorKind.LessThanOrEqual => BinaryOperatorKind.GreaterThanOrEqual,
+        _ => kind,
+    };
 
     private static string GetOperatorString(BinaryOperatorKind operatorKind) => operatorKind switch
     {
