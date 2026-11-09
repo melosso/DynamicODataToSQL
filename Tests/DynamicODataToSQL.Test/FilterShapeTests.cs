@@ -23,15 +23,19 @@ public class FilterShapeTests
     [InlineData("Name eq Type", "SELECT * FROM [Products] WHERE [Products].[Name] = [Products].[Type]", null)]
     [InlineData("not (Name eq Type)", "SELECT * FROM [Products] WHERE NOT [Products].[Name] = [Products].[Type]", null)]
     [InlineData("not (Name eq 'Tea')", "SELECT * FROM [Products] WHERE NOT ([Products].[Name] = @p0)", "Tea")]
-    public void SupportedShape_EmitsPredicate(string filter, string expectedSql, object? expectedParam)
+    public void SupportedShapeEmitsPredicate(string filter, string expectedSql, object? expectedParam)
     {
         var (sql, parameters) = Convert("filter", filter);
 
         Assert.Equal(expectedSql, sql, ignoreCase: true, ignoreWhiteSpaceDifferences: true);
         if (expectedParam is null)
+        {
             Assert.Empty(parameters);
+        }
         else
+        {
             Assert.Equal(expectedParam, Assert.Single(parameters).Value);
+        }
     }
 
     [Theory]
@@ -49,17 +53,17 @@ public class FilterShapeTests
     [InlineData("contains('abc', Name)")]
     [InlineData("contains(Name, Type)")]
     [InlineData("Id gt 0 and not (TotalInventory sub 1 eq 0)")]
-    public void UnsupportedFilter_Throws(string filter) =>
+    public void UnsupportedFilterThrows(string filter) =>
         Assert.Throws<NotSupportedException>(() => Convert("filter", filter));
 
     [Theory]
     [InlineData("1")]
     [InlineData("length(Name)")]
-    public void UnsupportedOrderBy_Throws(string orderby) =>
+    public void UnsupportedOrderByThrows(string orderby) =>
         Assert.Throws<NotSupportedException>(() => Convert("orderby", orderby));
 
     [Fact]
-    public void Not_LeavesNoNegationForLaterPredicates()
+    public void NotLeavesNoNegationForLaterPredicates()
     {
         var query = new ODataToSqlConverter(new TestsEdmModelBuilder(), Compiler)
             .ConvertToSQLKataQuery("Products", new Dictionary<string, string> { ["filter"] = "not (Name eq 'Tea')" }, false, true);

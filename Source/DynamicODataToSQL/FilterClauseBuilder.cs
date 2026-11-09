@@ -95,6 +95,12 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
                 }
                 break;
 
+            case BinaryOperatorKind.Add:
+            case BinaryOperatorKind.Subtract:
+            case BinaryOperatorKind.Multiply:
+            case BinaryOperatorKind.Divide:
+            case BinaryOperatorKind.Modulo:
+            case BinaryOperatorKind.Has:
             default:
                 throw new NotSupportedException($"Operator '{nodeIn.OperatorKind}' is not supported in $filter");
         }
@@ -146,20 +152,25 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
     /// <inheritdoc/>
     public override Query Visit(UnaryOperatorNode nodeIn)
     {
-        switch (nodeIn.OperatorKind)
+        if (nodeIn.OperatorKind != UnaryOperatorKind.Not)
         {
-            case UnaryOperatorKind.Not when nodeIn.Operand.Kind is QueryNodeKind.SingleValueFunctionCall
-                or QueryNodeKind.BinaryOperator
-                or QueryNodeKind.In:
-                // the operand emits one clause or throws, so the not flag never outlives it
-                var clauses = _query.GetComponents("where").Count;
-                var negated = nodeIn.Operand.Accept(new FilterClauseBuilder(_query.Not(), _tryToParseDates, columnNameResolver));
-                if (negated.GetComponents("where").Count != clauses + 1)
-                    throw new NotSupportedException("The operand of 'not' is not supported in $filter");
-                return _query = negated;
-            default:
-                throw new NotSupportedException($"Operator '{nodeIn.OperatorKind}' is not supported in $filter");
+            throw new NotSupportedException($"Operator '{nodeIn.OperatorKind}' is not supported in $filter");
         }
+
+        if (nodeIn.Operand.Kind is not (QueryNodeKind.SingleValueFunctionCall or QueryNodeKind.BinaryOperator or QueryNodeKind.In))
+        {
+            throw new NotSupportedException("The operand of 'not' is not supported in $filter");
+        }
+
+        // the operand emits one clause or throws, so the not flag never outlives it
+        var clauses = _query.GetComponents("where").Count;
+        var negated = nodeIn.Operand.Accept(new FilterClauseBuilder(_query.Not(), _tryToParseDates, columnNameResolver));
+        if (negated.GetComponents("where").Count != clauses + 1)
+        {
+            throw new NotSupportedException("The operand of 'not' is not supported in $filter");
+        }
+
+        return _query = negated;
     }
 
     private Query ApplyFunction(Query query, SingleValueFunctionCallNode leftNode, string operand, object rightValue)
@@ -291,7 +302,11 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
         BinaryOperatorKind.GreaterThanOrEqual => BinaryOperatorKind.LessThanOrEqual,
         BinaryOperatorKind.LessThan => BinaryOperatorKind.GreaterThan,
         BinaryOperatorKind.LessThanOrEqual => BinaryOperatorKind.GreaterThanOrEqual,
-        _ => kind,
+        BinaryOperatorKind.Equal or BinaryOperatorKind.NotEqual => kind,
+        BinaryOperatorKind.Or or BinaryOperatorKind.And or BinaryOperatorKind.Add or BinaryOperatorKind.Subtract
+            or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Modulo or BinaryOperatorKind.Has
+            => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only comparison operators mirror"),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only comparison operators mirror"),
     };
 
     private static string GetOperatorString(BinaryOperatorKind operatorKind) => operatorKind switch
