@@ -162,7 +162,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             throw new NotSupportedException("The operand of 'not' is not supported in $filter");
         }
 
-        // the operand emits one clause or throws, so the not flag never outlives it
+        // operand emits one clause or throws
         var clauses = _query.GetComponents("where").Count;
         var negated = nodeIn.Operand.Accept(new FilterClauseBuilder(_query.Not(), _tryToParseDates, columnNameResolver));
         if (negated.GetComponents("where").Count != clauses + 1)
@@ -213,7 +213,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
         return query;
     }
 
-    // tolower or toupper around the first argument makes the match case insensitive
+    // tolower or toupper means case insensitive
     private (bool CaseSensitive, string ColumnName) ResolveFunctionColumn(QueryNode[] nodes)
     {
         var source = nodes[0] is ConvertNode convert ? convert.Source : nodes[0];
