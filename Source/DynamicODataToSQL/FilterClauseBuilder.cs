@@ -277,7 +277,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
     }
 
     private IEnumerable<object> GetCollectionConstantValues(CollectionConstantNode node) =>
-        node.Collection.Select(n =>
+        node.Items.Select(n =>
         {
             // The OData library parser will take empty strings and replace them with quoted text strings, specifically
             // in collection filter clauses:
@@ -286,7 +286,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             // an empty string, unless you special case it here. This does not seem to be an issue for general filters:
             // eg. $filter=Name eq ''
             // So we can focus this workaround to just processing collection constant values.
-            if (n.Kind == QueryNodeKind.Constant && n.Value is string nodeValue && nodeValue == @"""""")
+            if (n is ConstantNode { Value: @"""""" })
             {
                 return string.Empty;
             }
