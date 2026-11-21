@@ -142,8 +142,9 @@ See [DynamicODataSampleService](Samples/DynamicODataSampleService) for and examp
 ### apply support (aggregations)
 Aggregations using Odata `apply` query option is supported. Spec: http://docs.oasis-open.org/odata/odata-data-aggregation-ext/v4.0/odata-data-aggregation-ext-v4.0.html
 
-- Transformations: `filter`, `groupby` and `aggregate` are supported. `expand`, `concat`, `search`, `top`, `bottom` are NOT supported.
+- Transformations: `filter`, `groupby`, `aggregate` and `compute` are supported. `expand`, `concat`, `search`, `top`, `bottom` are NOT supported.
 - `sum`, `min`, `max`, `avg`, `countdistinct` and `count` are supported.
+- `compute` supports `year`, `month`, `day`, `hour` and `minute`. It emits functions such as `year([OrderDate])`, which SQL Server and MySQL provide but PostgreSQL does not.
 
 Example
 
@@ -154,7 +155,7 @@ Example
 is converted to 
 
   ```sql
-  SELECT [Country], Sum(Amount) AS Total, Avg(Amount) AS AvgAmt FROM [Orders] GROUP BY [Country]
+  SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] GROUP BY [Country]
   ```
 
 For more advanced aggreagate scenarios supported, see unit tests. 
