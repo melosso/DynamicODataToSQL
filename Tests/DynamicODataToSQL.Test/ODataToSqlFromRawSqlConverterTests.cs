@@ -338,6 +338,32 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
+        // Test 18
+        {
+            var testName = "Apply+EncodedColumnNames";
+            var rawSql = "select ItemCode as [2TableName], OnHand as [On Hand] from OITM";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"apply", "groupby((_x0032_TableName),aggregate(On_x0020_Hand with sum as On_x0020_Hand, $count as total))" }
+            };
+            var expectedSQL = "WITH [RawSql] AS (select ItemCode as [2TableName], OnHand as [On Hand] from OITM)\nSELECT [2TableName], Sum([On Hand]) AS [On_x0020_Hand], COUNT(1) AS [total] FROM [RawSql] GROUP BY [2TableName]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 19
+        {
+            var testName = "Apply+EncodedClosingBracket";
+            var rawSql = "SELECT * FROM [Products]";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"apply", "aggregate(a_x005D__x003B_b with sum as total)" }
+            };
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Products])\nSELECT Sum([a]];b]) AS [total] FROM [RawSql]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new EdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });

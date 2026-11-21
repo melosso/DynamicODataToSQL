@@ -594,6 +594,37 @@ INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
+        // Test 30
+        {
+            var testName = "Select+Filter+Sort+EncodedColumnNames";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "_x0032_TableName, Closed_x0020__x0028_UTC_x0029_" },
+                {"filter", "a_x007E_b eq 'Tea'" },
+                {"orderby", "_x0032_TableName" },
+            };
+            var expectedSQL = @"SELECT [Products].[2TableName], [Products].[Closed (UTC)] FROM [Products] WHERE [Products].[a~b] = @p0 ORDER BY [Products].[2TableName]";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "Tea"},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 31
+        {
+            var testName = "Filter+EncodedClosingBracket";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "a_x005D__x003B_b eq _x0032_A" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[a]];b] = [Products].[2A]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new TestsEdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });
