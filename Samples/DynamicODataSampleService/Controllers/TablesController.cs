@@ -15,9 +15,11 @@ using DynamicODataToSQL;
 
 using Flurl;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.OData;
 
 using Newtonsoft.Json.Linq;
 
@@ -45,16 +47,25 @@ public class TablesController : ControllerBase
         [FromQuery(Name = "$top")] int top = 10,
         [FromQuery(Name = "$skip")] int skip = 0)
     {
-        var query = _oDataToSqlConverter.ConvertToSQL(tableName,
-                new Dictionary<string, string>
-                {
-                    { "select", select },
-                    { "filter", filter },
-                    { "orderby", orderby },
-                    { "top", (top + 1).ToString(null,CultureInfo.InvariantCulture) },
-                    { "skip", skip.ToString(null,CultureInfo.InvariantCulture) }
-                }
-            );
+        (string, IDictionary<string, object>) query;
+        try
+        {
+            query = _oDataToSqlConverter.ConvertToSQL(tableName,
+                    new Dictionary<string, string>
+                    {
+                        { "select", select },
+                        { "filter", filter },
+                        { "orderby", orderby },
+                        { "top", (top + 1).ToString(null,CultureInfo.InvariantCulture) },
+                        { "skip", skip.ToString(null,CultureInfo.InvariantCulture) }
+                    }
+                );
+        }
+        catch (Exception ex) when (ex is ODataException or NotSupportedException)
+        {
+            // Malformed or unsupported query options are client errors.
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
         IEnumerable<dynamic> rows = null;
         await using var conn = new SqlConnection(_connectionString);
         rows = (await conn.QueryAsync(query.Item1, query.Item2).ConfigureAwait(false))?.ToList();
