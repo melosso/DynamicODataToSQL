@@ -1,6 +1,7 @@
 namespace DynamicODataToSQL;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.OData.UriParser;
@@ -111,6 +112,25 @@ public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnName
         return queryIn;
     }
 
+    // MySQL has YEAR() through MINUTE(); SQL Server lacks HOUR() and MINUTE(); PostgreSQL and SQLite need their own forms.
+    private string DatePart(string part, string column) => _compiler.EngineCode switch
+    {
+        EngineCodes.SqlServer when part.ToUpperInvariant() is "HOUR" or "MINUTE" => $"DATEPART({part.ToUpperInvariant()}, {column})",
+        EngineCodes.SqlServer or EngineCodes.MySql => $"{part}({column})",
+        EngineCodes.PostgreSql => $"CAST(EXTRACT({part.ToUpperInvariant()} FROM {column}) AS INTEGER)",
+        EngineCodes.Sqlite => $"CAST(strftime('{SqliteFormats[part.ToUpperInvariant()]}', {column}) AS INTEGER)",
+        _ => throw new NotSupportedException($"compute({part}) is not supported for the {_compiler.EngineCode} compiler"),
+    };
+
+    private static readonly Dictionary<string, string> SqliteFormats = new()
+    {
+        ["YEAR"] = "%Y",
+        ["MONTH"] = "%m",
+        ["DAY"] = "%d",
+        ["HOUR"] = "%H",
+        ["MINUTE"] = "%M",
+    };
+
     private Query Visit(Query queryIn, ComputeTransformationNode nodeIn)
     {
         queryIn = queryIn.SelectRaw("*");
@@ -127,7 +147,7 @@ public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnName
                     case "MINUTE":
                         var pr = se.Parameters.Single();
                         var columnName = columnNameResolver.GetColumnName(pr, true);
-                        queryIn = queryIn.SelectRaw($"{se.Name}({columnName}) as {computeExpression.Alias}");
+                        queryIn = queryIn.SelectRaw($"{DatePart(se.Name, columnName)} as {computeExpression.Alias}");
                         break;
                     default:
                         throw new NotSupportedException($"Aggregate method {se.Name} not supported");

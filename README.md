@@ -144,7 +144,7 @@ Aggregations using Odata `apply` query option is supported. Spec: http://docs.oa
 
 - Transformations: `filter`, `groupby`, `aggregate` and `compute` are supported. `expand`, `concat`, `search`, `top`, `bottom` are NOT supported.
 - `sum`, `min`, `max`, `avg`, `countdistinct` and `count` are supported.
-- `compute` supports `year`, `month`, `day`, `hour` and `minute`. It emits functions such as `year([OrderDate])`, which SQL Server and MySQL provide but PostgreSQL does not.
+- `compute` supports `year`, `month`, `day`, `hour` and `minute` on SQL Server, MySQL, PostgreSQL and SQLite.
 
 Example
 
