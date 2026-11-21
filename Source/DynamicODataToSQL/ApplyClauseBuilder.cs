@@ -86,8 +86,7 @@ public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnName
                     AggregationMethod.Average => queryIn.SelectRaw($"AVG({columnNameResolver.GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
                     AggregationMethod.CountDistinct => queryIn.SelectRaw($"COUNT(DISTINCT {columnNameResolver.GetColumnName(expr.Expression, true)}) AS {_compiler.WrapValue(expr.Alias)}"),
                     AggregationMethod.VirtualPropertyCount => queryIn.SelectRaw($"COUNT(1) AS {_compiler.WrapValue(expr.Alias)}"),
-                    AggregationMethod.Custom => throw new NotImplementedException(),
-                    _ => throw new NotSupportedException($"Aggregate method {expr.Method:g} not supported"),
+                    AggregationMethod.Custom or _ => throw new NotSupportedException($"Aggregate method {expr.Method:g} not supported"),
                 };
             }
         }

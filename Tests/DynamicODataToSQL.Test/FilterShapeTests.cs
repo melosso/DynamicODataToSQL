@@ -21,6 +21,9 @@ public class FilterShapeTests
     [InlineData("5 lt TotalInventory", "SELECT * FROM [Products] WHERE [Products].[TotalInventory] > @p0", 5)]
     [InlineData("10 ge TotalInventory", "SELECT * FROM [Products] WHERE [Products].[TotalInventory] <= @p0", 10)]
     [InlineData("null eq Name", "SELECT * FROM [Products] WHERE [Products].[Name] IS NULL", null)]
+    [InlineData("5 gt TotalInventory", "SELECT * FROM [Products] WHERE [Products].[TotalInventory] < @p0", 5)]
+    [InlineData("5 le TotalInventory", "SELECT * FROM [Products] WHERE [Products].[TotalInventory] >= @p0", 5)]
+    [InlineData("'Tea' ne Name", "SELECT * FROM [Products] WHERE [Products].[Name] <> @p0", "Tea")]
     [InlineData("Name eq Type", "SELECT * FROM [Products] WHERE [Products].[Name] = [Products].[Type]", null)]
     [InlineData("not (Name eq Type)", "SELECT * FROM [Products] WHERE NOT [Products].[Name] = [Products].[Type]", null)]
     [InlineData("not (Name eq 'Tea')", "SELECT * FROM [Products] WHERE NOT ([Products].[Name] = @p0)", "Tea")]
@@ -77,6 +80,32 @@ public class FilterShapeTests
     [InlineData("compute(year(a_x005B_b) as yr)")]
     public void UnsupportedApplyThrows(string apply) =>
         Assert.Throws<NotSupportedException>(() => Convert("apply", apply));
+
+    [Theory]
+    [InlineData("compute(day(OrderDate) as d, hour(OrderDate) as h, minute(OrderDate) as m)", "SELECT *, day([OrderDate]) as d, hour([OrderDate]) as h, minute([OrderDate]) as m FROM [Products]")]
+    [InlineData("aggregate(Price with min as a, Price with max as b, Price with average as c)", "SELECT Min([Price]) AS [a], Max([Price]) AS [b], AVG([Price]) AS [c] FROM [Products]")]
+    [InlineData("filter(Name eq 'Tea')/groupby((Type))", "SELECT [Type] FROM [Products] WHERE [Name] = @p0 GROUP BY [Type]")]
+    public void SupportedApplyEmitsQuery(string apply, string expectedSql) =>
+        Assert.Equal(expectedSql, Convert("apply", apply).Sql);
+
+    [Theory]
+    [InlineData("compute(length(Name) as l)")]
+    [InlineData("compute(Name as n)")]
+    public void UnsupportedComputeThrows(string apply) =>
+        Assert.Throws<NotSupportedException>(() => Convert("apply", apply));
+
+    [Fact]
+    public void NullArgumentsThrow()
+    {
+        var converter = new ODataToSqlConverter(new TestsEdmModelBuilder(), Compiler);
+        var query = new Dictionary<string, string>();
+
+        Assert.Throws<ArgumentNullException>(() => new ODataToSqlConverter(null, Compiler));
+        Assert.Throws<ArgumentNullException>(() => new ODataToSqlConverter(new TestsEdmModelBuilder(), null));
+        Assert.Throws<ArgumentNullException>(() => converter.ConvertToSQL(null, query));
+        Assert.Throws<ArgumentNullException>(() => converter.ConvertToSqlFromRawSql(null, query));
+        Assert.Throws<ArgumentNullException>(() => new EdmModelBuilder().BuildTableModel(" "));
+    }
 
     [Theory]
     [InlineData("filter", "{0} eq 'v'", "SELECT * FROM {1} WHERE {1}.{0} = @p0")]

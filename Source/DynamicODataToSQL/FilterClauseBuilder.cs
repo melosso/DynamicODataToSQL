@@ -317,14 +317,9 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
         BinaryOperatorKind.GreaterThanOrEqual => ">=",
         BinaryOperatorKind.LessThan => "<",
         BinaryOperatorKind.LessThanOrEqual => "<=",
-        BinaryOperatorKind.Or => "or",
-        BinaryOperatorKind.And => "and",
-        BinaryOperatorKind.Add => "+",
-        BinaryOperatorKind.Subtract => "-",
-        BinaryOperatorKind.Multiply => "*",
-        BinaryOperatorKind.Divide => "/",
-        BinaryOperatorKind.Modulo => "%",
-        BinaryOperatorKind.Has => throw new NotImplementedException(),
-        _ => string.Empty,
+        BinaryOperatorKind.Or or BinaryOperatorKind.And or BinaryOperatorKind.Add or BinaryOperatorKind.Subtract
+            or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Modulo or BinaryOperatorKind.Has
+            => throw new ArgumentOutOfRangeException(nameof(operatorKind), operatorKind, "Only comparison operators are supported"),
+        _ => throw new ArgumentOutOfRangeException(nameof(operatorKind), operatorKind, "Only comparison operators are supported"),
     };
 }
