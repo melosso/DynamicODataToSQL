@@ -1,8 +1,10 @@
 namespace DynamicODataToSQL.Test;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using SqlKata.Compilers;
 
@@ -44,6 +46,44 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
 
         Assert.Equal(expectedSQL, actualSQL, ignoreCase: true, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
         Assert.True(Utility.DictionariesAreEqual(expectedSQLParams, actualSQLParams));
+    }
+
+    [Fact]
+    public void ConvertToSQLFromRawSqlConcurrentExpectedBehavior()
+    {
+        // Arrange: one shared instance, as when registered as a singleton.
+        var oDataToSqlConverter = CreateODataToSqlConverter();
+        var cases = GetTestData().ToArray();
+        var expected = cases.Select(Run).ToArray();
+        var iterations = int.TryParse(Environment.GetEnvironmentVariable("CONCURRENCY_ITERATIONS"), out var n) ? n : 50;
+        var failures = new ConcurrentBag<string>();
+
+        // Act
+        Parallel.For(0, cases.Length * iterations, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 }, i =>
+        {
+            var index = i % cases.Length;
+            var actual = Run(cases[index]);
+            if (actual != expected[index])
+            {
+                failures.Add($"{cases[index][0]}: {actual}");
+            }
+        });
+
+        // Assert
+        Assert.Empty(failures);
+
+        string Run(object[] c)
+        {
+            try
+            {
+                var (sql, parameters) = oDataToSqlConverter.ConvertToSqlFromRawSql((string)c[1], (IDictionary<string, string>)c[3], (bool)c[4], (bool)c[2]);
+                return sql + "|" + string.Join(",", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
     }
 
     public static IEnumerable<object[]> GetTestData()
@@ -212,7 +252,7 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","filter(Amount ge 100)/groupby((Country),aggregate(Amount with sum as Total,Amount with average as AvgAmt))/filter(AvgAmt ge 20)"}
             };
-            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [RawSql] WHERE [Amount] >= @p0 GROUP BY [Country]) WHERE [AvgAmt] >= @p1";
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [RawSql] WHERE [Amount] >= @p0 GROUP BY [Country]) AS [apply] WHERE [AvgAmt] >= @p1";
             var expectedSQLParams = new Dictionary<string, object> { { "@p0", 100 }, { "@p1", 20 } };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -316,7 +356,7 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","compute(year(OrderDate) as yr, month(OrderDate) as mn)/groupby((yr,mn),aggregate(value with average as AvgValue))" }
             };
-            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year(OrderDate) as yr, month(OrderDate) as mn FROM [RawSql]) GROUP BY [yr], [mn]";
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [RawSql]) AS [apply] GROUP BY [yr], [mn]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -338,6 +378,32 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
+        // Test 18
+        {
+            var testName = "Apply+EncodedColumnNames";
+            var rawSql = "select ItemCode as [2TableName], OnHand as [On Hand] from OITM";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"apply", "groupby((_x0032_TableName),aggregate(On_x0020_Hand with sum as On_x0020_Hand, $count as total))" }
+            };
+            var expectedSQL = "WITH [RawSql] AS (select ItemCode as [2TableName], OnHand as [On Hand] from OITM)\nSELECT [2TableName], Sum([On Hand]) AS [On_x0020_Hand], COUNT(1) AS [total] FROM [RawSql] GROUP BY [2TableName]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 19
+        {
+            var testName = "Apply+ComputeEncodedSqlPunctuation";
+            var rawSql = "SELECT * FROM [Orders]";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"apply", "compute(year(OrderDate_x0029__x003B__x0020_DROP_x0020_TABLE_x0020_Users_x003B__x0020__x002D__x002D_) as yr)" }
+            };
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT *, year([OrderDate); DROP TABLE Users; --]) as yr FROM [RawSql]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new EdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });

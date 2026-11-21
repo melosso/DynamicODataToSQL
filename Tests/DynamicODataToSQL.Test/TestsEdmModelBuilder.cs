@@ -85,7 +85,7 @@ public class TestsEdmModelBuilder : EdmModelBuilder
                     }
                 }
 
-                var targetEntity = lookupEntitySet.EntityType();
+                var targetEntity = (lookupEntitySet ?? throw new InvalidOperationException("Entity container is not mutable")).EntityType;
                 var navigationPropertyInfo = new EdmNavigationPropertyInfo
                 {
                     Name = navigationProperty.navigationPropertyName,

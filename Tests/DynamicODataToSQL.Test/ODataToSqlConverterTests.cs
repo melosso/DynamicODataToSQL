@@ -1,8 +1,10 @@
 namespace DynamicODataToSQL.Test;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using SqlKata.Compilers;
 
@@ -44,6 +46,44 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
 
         Assert.Equal(expectedSQL, actualSQL, ignoreCase: true, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
         Assert.True(Utility.DictionariesAreEqual(expectedSQLParams, actualSQLParams));
+    }
+
+    [Fact]
+    public void ConvertToSQLConcurrentExpectedBehavior()
+    {
+        // Arrange: one shared instance, as when registered as a singleton.
+        var oDataToSqlConverter = CreateODataToSqlConverter();
+        var cases = GetTestData().ToArray();
+        var expected = cases.Select(Run).ToArray();
+        var iterations = int.TryParse(Environment.GetEnvironmentVariable("CONCURRENCY_ITERATIONS"), out var n) ? n : 50;
+        var failures = new ConcurrentBag<string>();
+
+        // Act
+        Parallel.For(0, cases.Length * iterations, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 }, i =>
+        {
+            var index = i % cases.Length;
+            var actual = Run(cases[index]);
+            if (actual != expected[index])
+            {
+                failures.Add($"{cases[index][0]}: {actual}");
+            }
+        });
+
+        // Assert
+        Assert.Empty(failures);
+
+        string Run(object[] c)
+        {
+            try
+            {
+                var (sql, parameters) = oDataToSqlConverter.ConvertToSQL((string)c[1], (IDictionary<string, string>)c[3], (bool)c[4], (bool)c[2]);
+                return sql + "|" + string.Join(",", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
     }
 
     public static IEnumerable<object[]> GetTestData()
@@ -211,7 +251,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","filter(Amount ge 100)/groupby((Country),aggregate(Amount with sum as Total,Amount with average as AvgAmt))/filter(AvgAmt ge 20)"}
             };
-            var expectedSQL = @"SELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] WHERE [Amount] >= @p0 GROUP BY [Country]) WHERE [AvgAmt] >= @p1";
+            var expectedSQL = @"SELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] WHERE [Amount] >= @p0 GROUP BY [Country]) AS [apply] WHERE [AvgAmt] >= @p1";
             var expectedSQLParams = new Dictionary<string, object> { { "@p0", 100d }, { "@p1", 20 } };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -316,7 +356,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","compute(year(OrderDate) as yr, month(OrderDate) as mn)/groupby((yr,mn),aggregate(value with average as AvgValue))" }
             };
-            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year(OrderDate) as yr, month(OrderDate) as mn FROM [Orders]) GROUP BY [yr], [mn]";
+            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [Orders]) AS [apply] GROUP BY [yr], [mn]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -594,6 +634,76 @@ INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
 
+        // Test 30
+        {
+            var testName = "Select+Filter+Sort+EncodedColumnNames";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"select", "_x0032_TableName, Closed_x0020__x0028_UTC_x0029_" },
+                {"filter", "a_x007E_b eq 'Tea'" },
+                {"orderby", "_x0032_TableName" },
+            };
+            var expectedSQL = @"SELECT [Products].[2TableName], [Products].[Closed (UTC)] FROM [Products] WHERE [Products].[a~b] = @p0 ORDER BY [Products].[2TableName]";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "Tea"},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 31
+        {
+            var testName = "Filter+EncodedSqlPunctuation";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "a_x0027__x0029__x003B__x0020__x002D__x002D_b eq _x0032_A" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[a'); --b] = [Products].[2A]";
+            var expectedSQLParams = new Dictionary<string, object> { };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 32
+        {
+            var testName = "Filter+WhitespaceInStringConstants";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "Name eq 'Test ' or Name eq ' Test' or Name eq ' ' or Name eq '' or Name eq ' it''s '" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE (((([Products].[Name] = @p0 OR [Products].[Name] = @p1) OR [Products].[Name] = @p2) OR [Products].[Name] = @p3) OR [Products].[Name] = @p4)";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "Test "},
+                {"@p1", " Test"},
+                {"@p2", " "},
+                {"@p3", ""},
+                {"@p4", " it's "},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 33
+        {
+            var testName = "Filter+WhitespaceInFunctionsAndIn";
+            var tableName = "Products";
+            var tryToParseDates = false;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "contains(Name,' a ') and Type in (' b ', 'c') and Name eq ' 2020-09-08 '" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE (([Products].[Name] like @p0 AND [Products].[Type] IN (@p1, @p2)) AND [Products].[Name] = @p3)";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "% a %"},
+                {"@p1", " b "},
+                {"@p2", "c"},
+                {"@p3", " 2020-09-08 "},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new TestsEdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });

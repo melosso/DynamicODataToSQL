@@ -75,6 +75,22 @@ IDictionary<string, object> sqlParams = result.Item2;
 
 See Unit tests for more examples
 
+### Column names with special characters
+OData identifiers only allow letters, digits and `_`. Escape any other character as `_xHHHH_` (the `XmlConvert.EncodeName` format), e.g. `Closed_x0020__x0028_UTC_x0029_` for `Closed (UTC)` or `_x0032_TableName` for `2TableName`. Escaped names are decoded and always emitted as quoted identifiers.
+
+Names that decode to a control character or to `.` `?` `{` `}` `[` `]` `\` throw `NotSupportedException`, because SqlKata treats these as syntax even inside quoted identifiers.
+
+### Thread safety
+`ODataToSqlConverter` and `EdmModelBuilder` keep no per-call state, so one instance can be shared across threads and registered as a singleton:
+
+```c#
+services.AddSingleton<IEdmModelBuilder, EdmModelBuilder>();
+services.AddSingleton<Compiler>(new SqlServerCompiler { UseLegacyPagination = false });
+services.AddSingleton<IODataToSqlConverter, ODataToSqlConverter>();
+```
+
+Configure the `Compiler` before sharing it and do not change its properties afterwards. A custom `IEdmModelBuilder` must be thread-safe as well.
+
 ## Example OData Service
 See [DynamicODataSampleService](Samples/DynamicODataSampleService) for and example OData service. 
 
@@ -126,8 +142,9 @@ See [DynamicODataSampleService](Samples/DynamicODataSampleService) for and examp
 ### apply support (aggregations)
 Aggregations using Odata `apply` query option is supported. Spec: http://docs.oasis-open.org/odata/odata-data-aggregation-ext/v4.0/odata-data-aggregation-ext-v4.0.html
 
-- Transformations: `filter`, `groupby` and `aggregate` are supported. `expand`, `concat`, `search`, `top`, `bottom` are NOT supported.
+- Transformations: `filter`, `groupby`, `aggregate` and `compute` are supported. `expand`, `concat`, `search`, `top`, `bottom` are NOT supported.
 - `sum`, `min`, `max`, `avg`, `countdistinct` and `count` are supported.
+- `compute` supports `year`, `month`, `day`, `hour` and `minute` on SQL Server, MySQL, PostgreSQL and SQLite.
 
 Example
 
@@ -138,7 +155,7 @@ Example
 is converted to 
 
   ```sql
-  SELECT [Country], Sum(Amount) AS Total, Avg(Amount) AS AvgAmt FROM [Orders] GROUP BY [Country]
+  SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] GROUP BY [Country]
   ```
 
 For more advanced aggreagate scenarios supported, see unit tests. 

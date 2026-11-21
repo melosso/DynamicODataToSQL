@@ -3,6 +3,7 @@ namespace DynamicODataToSQL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml;
 
 using Microsoft.OData.Edm;
 using Microsoft.OData.UriParser;
@@ -55,31 +56,27 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
             throw new NotSupportedException($"Expected a property, found '{node.Kind}'");
         }
 
+        // Decode before wrapping so a decoded closing quote (e.g. _x005D_) is escaped by WrapValue.
+        table = XmlConvert.DecodeName(table);
+        column = DecodeColumnName(column);
         if (wrap)
         {
             table = compiler.WrapValue(table);
             column = compiler.WrapValue(column);
         }
 
-        if (useNamespacing)
-        {
-            return $"{table}.{column}".Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
-        }
-        else
-        {
-            return column.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
-        }
+        return useNamespacing ? $"{table}.{column}" : column;
     }
 
     public string GetColumnName(string propertyName)
     {
         if (useNamespacing)
         {
-            return $"{tableName}.{propertyName}".Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
+            return $"{XmlConvert.DecodeName(tableName)}.{DecodeColumnName(propertyName)}";
         }
         else
         {
-            return propertyName.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ");
+            return DecodeColumnName(propertyName);
         }
     }
 
@@ -92,11 +89,11 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
             {
                 if (useNamespacing)
                 {
-                    names.Add($"{tableName}.{structuralProperty.Name.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ")}");
+                    names.Add($"{tableName}.{DecodeColumnName(structuralProperty.Name)}");
                 }
                 else
                 {
-                    names.Add(structuralProperty.Name.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " "));
+                    names.Add(DecodeColumnName(structuralProperty.Name));
                 }
             }
         }
@@ -122,7 +119,7 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
         {
             throw new InvalidOperationException("Only structural properties may be selected.");
         }
-        return $"{navigationPropertyName}.{structuralProperty.Name.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ")}";
+        return $"{navigationPropertyName}.{DecodeColumnName(structuralProperty.Name)}";
     }
 
     public string[] GetColumnNames(string navigationPropertyName)
@@ -144,9 +141,21 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
         {
             if (property is EdmStructuralProperty structuralProperty)
             {
-                names.Add($"{navigationPropertyName}.{structuralProperty.Name.Replace(ODataToSqlConverter.SPACESIGNREPLACEMENT, " ")}");
+                names.Add($"{navigationPropertyName}.{DecodeColumnName(structuralProperty.Name)}");
             }
         }
         return [.. names];
+    }
+
+    // OData names escape non-identifier characters as _xHHHH_ (e.g. _x0020_ for a space).
+    private static string DecodeColumnName(string name)
+    {
+        var decoded = XmlConvert.DecodeName(name);
+        // SqlKata treats these as syntax even inside quoted identifiers: '.' splits names, '?' is a parameter
+        // placeholder, '{' '}' '[' ']' become unescaped quote characters in raw SQL and '\' escapes them.
+        // Databases accept any other character in a quoted identifier, so this list stays a denylist.
+        return decoded.IndexOfAny(['.', '?', '{', '}', '[', ']', '\\']) >= 0 || decoded.Any(char.IsControl)
+            ? throw new NotSupportedException($"Column name '{name}' contains a character that is not supported")
+            : decoded;
     }
 }

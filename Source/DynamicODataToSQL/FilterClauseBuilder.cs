@@ -247,13 +247,13 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             var value = (node as ConstantNode).Value;
             if (value is string)
             {
-                var trimedValue = value.ToString();
-                if (_tryToParseDates && ConvertToDateTimeUTC(trimedValue, out var dateTime))
+                var text = value.ToString();
+                if (_tryToParseDates && ConvertToDateTimeUTC(text, out var dateTime))
                 {
                     return dateTime.Value;
                 }
 
-                return trimedValue;
+                return text;
             }
             else if (value is DateOnly date)
             {
@@ -277,7 +277,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
     }
 
     private IEnumerable<object> GetCollectionConstantValues(CollectionConstantNode node) =>
-        node.Collection.Select(n =>
+        node.Items.Select(n =>
         {
             // The OData library parser will take empty strings and replace them with quoted text strings, specifically
             // in collection filter clauses:
@@ -286,7 +286,7 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             // an empty string, unless you special case it here. This does not seem to be an issue for general filters:
             // eg. $filter=Name eq ''
             // So we can focus this workaround to just processing collection constant values.
-            if (n.Kind == QueryNodeKind.Constant && n.Value is string nodeValue && nodeValue == @"""""")
+            if (n is ConstantNode { Value: @"""""" })
             {
                 return string.Empty;
             }
@@ -317,14 +317,9 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
         BinaryOperatorKind.GreaterThanOrEqual => ">=",
         BinaryOperatorKind.LessThan => "<",
         BinaryOperatorKind.LessThanOrEqual => "<=",
-        BinaryOperatorKind.Or => "or",
-        BinaryOperatorKind.And => "and",
-        BinaryOperatorKind.Add => "+",
-        BinaryOperatorKind.Subtract => "-",
-        BinaryOperatorKind.Multiply => "*",
-        BinaryOperatorKind.Divide => "/",
-        BinaryOperatorKind.Modulo => "%",
-        BinaryOperatorKind.Has => throw new NotImplementedException(),
-        _ => string.Empty,
+        BinaryOperatorKind.Or or BinaryOperatorKind.And or BinaryOperatorKind.Add or BinaryOperatorKind.Subtract
+            or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Modulo or BinaryOperatorKind.Has
+            => throw new ArgumentOutOfRangeException(nameof(operatorKind), operatorKind, "Only comparison operators are supported"),
+        _ => throw new ArgumentOutOfRangeException(nameof(operatorKind), operatorKind, "Only comparison operators are supported"),
     };
 }
