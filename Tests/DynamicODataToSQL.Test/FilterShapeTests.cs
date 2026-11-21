@@ -57,6 +57,9 @@ public class FilterShapeTests
     [InlineData("a_x002E_b eq 'v'")]
     [InlineData("a_x003F_b eq 'v'")]
     [InlineData("_x007B_x_x002C_y_x007D_ eq 'v'")]
+    [InlineData("a_x005D_b eq 'v'")]
+    [InlineData("a_x005C_b eq 'v'")]
+    [InlineData("a_x0000_b eq 'v'")]
     public void UnsupportedFilterThrows(string filter) =>
         Assert.Throws<NotSupportedException>(() => Convert("filter", filter));
 
@@ -70,39 +73,52 @@ public class FilterShapeTests
     [Theory]
     [InlineData("aggregate(_x007D__x0029__x003B_DROP with sum as t)")]
     [InlineData("groupby((a_x003F_b))")]
+    [InlineData("aggregate(x_x005D__x0029__x003B__x0020_DROP_x0020_TABLE_x0020_users_x003B__x0020__x002D__x002D_ with sum as t)")]
+    [InlineData("compute(year(a_x005B_b) as yr)")]
     public void UnsupportedApplyThrows(string apply) =>
         Assert.Throws<NotSupportedException>(() => Convert("apply", apply));
 
     [Theory]
-    [InlineData("filter", "{0} eq 'v'", "SELECT * FROM [Products] WHERE [Products].[", "] = @p0")]
-    [InlineData("select", "{0}", "SELECT [Products].[", "] FROM [Products]")]
-    [InlineData("orderby", "{0}", "SELECT * FROM [Products] ORDER BY [Products].[", "]")]
-    [InlineData("apply", "aggregate({0} with sum as t)", "SELECT Sum([", "]) AS [t] FROM [Products]")]
-    public void EncodedColumnCharacterRoundTrips(string option, string format, string prefix, string suffix)
+    [InlineData("filter", "{0} eq 'v'", "SELECT * FROM {1} WHERE {1}.{0} = @p0")]
+    [InlineData("select", "{0}", "SELECT {1}.{0} FROM {1}")]
+    [InlineData("orderby", "{0}", "SELECT * FROM {1} ORDER BY {1}.{0}")]
+    [InlineData("apply", "aggregate({0} with sum as t)", "SELECT Sum({0}) AS {2} FROM {1}")]
+    [InlineData("apply", "aggregate({0} with countdistinct as t)", "SELECT COUNT(DISTINCT {0}) AS {2} FROM {1}")]
+    [InlineData("apply", "compute(year({0}) as yr)", "SELECT *, year({0}) as yr FROM {1}")]
+    public void EncodedColumnCharacterIsQuotedOrRejected(string option, string odataFormat, string sqlFormat)
     {
         var last = int.TryParse(Environment.GetEnvironmentVariable("DECODE_SWEEP_LAST"), out var n) ? n : 0x7E;
+        Compiler[] compilers = [Compiler, new PostgresCompiler(), new MySqlCompiler()];
         var failures = new List<string>();
-        for (var c = 0x20; c <= last; c++)
+        foreach (var compiler in compilers)
         {
-            if (c is '.' or '?' or '{' or '}' or (>= 0xD800 and <= 0xDFFF))
+            var converter = new ODataToSqlConverter(new TestsEdmModelBuilder(), compiler);
+            for (var c = 0x01; c <= last; c++)
             {
-                continue;
-            }
-
-            try
-            {
-                var (sql, _) = Convert(option, string.Format(CultureInfo.InvariantCulture, format, $"a_x{c:X4}_b"));
-                var quoted = sql.StartsWith(prefix, StringComparison.Ordinal) && sql.EndsWith(suffix, StringComparison.Ordinal)
-                    ? sql[prefix.Length..^suffix.Length]
-                    : null;
-                if (quoted is null || quoted.Replace("]]", "]") != $"a{(char)c}b" || quoted.Replace("]]", "").Contains(']'))
+                if (c is >= 0xD800 and <= 0xDFFF)
                 {
-                    failures.Add($"U+{c:X4}: {sql}");
+                    continue;
                 }
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"U+{c:X4}: {ex.GetType().Name}");
+
+                var column = $"a{(char)c}b";
+                var odata = string.Format(CultureInfo.InvariantCulture, odataFormat, $"a_x{c:X4}_b");
+                var rejected = char.IsControl((char)c) || "[]{}.?\\".Contains((char)c);
+                try
+                {
+                    var (sql, _) = converter.ConvertToSQL("Products", new Dictionary<string, string> { [option] = odata }, false, true);
+                    var expected = string.Format(CultureInfo.InvariantCulture, sqlFormat, compiler.WrapValue(column), compiler.WrapValue("Products"), compiler.WrapValue("t"));
+                    if (rejected || sql != expected)
+                    {
+                        failures.Add($"{compiler.EngineCode} U+{c:X4}: {sql}");
+                    }
+                }
+                catch (NotSupportedException) when (rejected)
+                {
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{compiler.EngineCode} U+{c:X4}: {ex.GetType().Name}");
+                }
             }
         }
 

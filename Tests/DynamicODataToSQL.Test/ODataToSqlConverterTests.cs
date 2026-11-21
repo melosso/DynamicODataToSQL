@@ -356,7 +356,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","compute(year(OrderDate) as yr, month(OrderDate) as mn)/groupby((yr,mn),aggregate(value with average as AvgValue))" }
             };
-            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year(OrderDate) as yr, month(OrderDate) as mn FROM [Orders]) GROUP BY [yr], [mn]";
+            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [Orders]) GROUP BY [yr], [mn]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -654,14 +654,14 @@ INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
         }
         // Test 31
         {
-            var testName = "Filter+EncodedClosingBracket";
+            var testName = "Filter+EncodedSqlPunctuation";
             var tableName = "Products";
             var tryToParseDates = true;
             var odataQueryParams = new Dictionary<string, string>
             {
-                {"filter", "a_x005D__x003B_b eq _x0032_A" },
+                {"filter", "a_x0027__x0029__x003B__x0020__x002D__x002D_b eq _x0032_A" },
             };
-            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[a]];b] = [Products].[2A]";
+            var expectedSQL = @"SELECT * FROM [Products] WHERE [Products].[a'); --b] = [Products].[2A]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }

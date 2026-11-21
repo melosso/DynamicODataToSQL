@@ -151,10 +151,11 @@ public class ColumnNameResolver(Compiler compiler, string tableName, IEdmModel m
     private static string DecodeColumnName(string name)
     {
         var decoded = XmlConvert.DecodeName(name);
-        // SqlKata treats these as syntax even inside quoted identifiers: '.' splits names, '?' is a
-        // parameter placeholder, and '{' '}' become unescaped quote characters in raw SQL.
-        return decoded.IndexOfAny(['.', '?', '{', '}']) >= 0
-            ? throw new NotSupportedException($"Column name '{decoded}' must not contain '.', '?', '{{' or '}}'")
+        // SqlKata treats these as syntax even inside quoted identifiers: '.' splits names, '?' is a parameter
+        // placeholder, '{' '}' '[' ']' become unescaped quote characters in raw SQL and '\' escapes them.
+        // Databases accept any other character in a quoted identifier, so this list stays a denylist.
+        return decoded.IndexOfAny(['.', '?', '{', '}', '[', ']', '\\']) >= 0 || decoded.Any(char.IsControl)
+            ? throw new NotSupportedException($"Column name '{name}' contains a character that is not supported")
             : decoded;
     }
 }

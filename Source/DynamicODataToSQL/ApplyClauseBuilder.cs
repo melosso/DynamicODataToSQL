@@ -127,7 +127,7 @@ public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnName
                     case "HOUR":
                     case "MINUTE":
                         var pr = se.Parameters.Single();
-                        var columnName = columnNameResolver.GetColumnName(pr);
+                        var columnName = columnNameResolver.GetColumnName(pr, true);
                         queryIn = queryIn.SelectRaw($"{se.Name}({columnName}) as {computeExpression.Alias}");
                         break;
                     default:

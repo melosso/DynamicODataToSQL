@@ -356,7 +356,7 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","compute(year(OrderDate) as yr, month(OrderDate) as mn)/groupby((yr,mn),aggregate(value with average as AvgValue))" }
             };
-            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year(OrderDate) as yr, month(OrderDate) as mn FROM [RawSql]) GROUP BY [yr], [mn]";
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [RawSql]) GROUP BY [yr], [mn]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -393,14 +393,14 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
         }
         // Test 19
         {
-            var testName = "Apply+EncodedClosingBracket";
-            var rawSql = "SELECT * FROM [Products]";
+            var testName = "Apply+ComputeEncodedSqlPunctuation";
+            var rawSql = "SELECT * FROM [Orders]";
             var tryToParseDates = true;
             var odataQueryParams = new Dictionary<string, string>
             {
-                {"apply", "aggregate(a_x005D__x003B_b with sum as total)" }
+                {"apply", "compute(year(OrderDate_x0029__x003B__x0020_DROP_x0020_TABLE_x0020_Users_x003B__x0020__x002D__x002D_) as yr)" }
             };
-            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Products])\nSELECT Sum([a]];b]) AS [total] FROM [RawSql]";
+            var expectedSQL = "WITH [RawSql] AS (SELECT * FROM [Orders])\nSELECT *, year([OrderDate); DROP TABLE Users; --]) as yr FROM [RawSql]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, rawSql, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }

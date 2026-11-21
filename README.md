@@ -75,6 +75,11 @@ IDictionary<string, object> sqlParams = result.Item2;
 
 See Unit tests for more examples
 
+### Column names with special characters
+OData identifiers only allow letters, digits and `_`. Escape any other character as `_xHHHH_` (the `XmlConvert.EncodeName` format), e.g. `Closed_x0020__x0028_UTC_x0029_` for `Closed (UTC)` or `_x0032_TableName` for `2TableName`. Escaped names are decoded and always emitted as quoted identifiers.
+
+Names that decode to a control character or to `.` `?` `{` `}` `[` `]` `\` throw `NotSupportedException`, because SqlKata treats these as syntax even inside quoted identifiers.
+
 ### Thread safety
 `ODataToSqlConverter` and `EdmModelBuilder` keep no per-call state, so one instance can be shared across threads and registered as a singleton:
 
