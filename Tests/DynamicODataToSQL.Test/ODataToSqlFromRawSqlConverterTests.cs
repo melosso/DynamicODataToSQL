@@ -1,8 +1,10 @@
 namespace DynamicODataToSQL.Test;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using SqlKata.Compilers;
 
@@ -44,6 +46,44 @@ public class ODataToSqlFromRawSqlConverterTests(ITestOutputHelper output)
 
         Assert.Equal(expectedSQL, actualSQL, ignoreCase: true, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
         Assert.True(Utility.DictionariesAreEqual(expectedSQLParams, actualSQLParams));
+    }
+
+    [Fact]
+    public void ConvertToSQLFromRawSqlConcurrentExpectedBehavior()
+    {
+        // Arrange: one shared instance, as when registered as a singleton.
+        var oDataToSqlConverter = CreateODataToSqlConverter();
+        var cases = GetTestData().ToArray();
+        var expected = cases.Select(Run).ToArray();
+        var iterations = int.TryParse(Environment.GetEnvironmentVariable("CONCURRENCY_ITERATIONS"), out var n) ? n : 50;
+        var failures = new ConcurrentBag<string>();
+
+        // Act
+        Parallel.For(0, cases.Length * iterations, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 }, i =>
+        {
+            var index = i % cases.Length;
+            var actual = Run(cases[index]);
+            if (actual != expected[index])
+            {
+                failures.Add($"{cases[index][0]}: {actual}");
+            }
+        });
+
+        // Assert
+        Assert.Empty(failures);
+
+        string Run(object[] c)
+        {
+            try
+            {
+                var (sql, parameters) = oDataToSqlConverter.ConvertToSqlFromRawSql((string)c[1], (IDictionary<string, string>)c[3], (bool)c[4], (bool)c[2]);
+                return sql + "|" + string.Join(",", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
     }
 
     public static IEnumerable<object[]> GetTestData()

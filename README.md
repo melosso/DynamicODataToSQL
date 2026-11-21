@@ -75,6 +75,17 @@ IDictionary<string, object> sqlParams = result.Item2;
 
 See Unit tests for more examples
 
+### Thread safety
+`ODataToSqlConverter` and `EdmModelBuilder` keep no per-call state, so one instance can be shared across threads and registered as a singleton:
+
+```c#
+services.AddSingleton<IEdmModelBuilder, EdmModelBuilder>();
+services.AddSingleton<Compiler>(new SqlServerCompiler { UseLegacyPagination = false });
+services.AddSingleton<IODataToSqlConverter, ODataToSqlConverter>();
+```
+
+Configure the `Compiler` before sharing it and do not change its properties afterwards. A custom `IEdmModelBuilder` must be thread-safe as well.
+
 ## Example OData Service
 See [DynamicODataSampleService](Samples/DynamicODataSampleService) for and example OData service. 
 
