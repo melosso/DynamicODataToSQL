@@ -247,13 +247,13 @@ public class FilterClauseBuilder(Query query, bool tryToParseDates, ColumnNameRe
             var value = (node as ConstantNode).Value;
             if (value is string)
             {
-                var trimedValue = value.ToString();
-                if (_tryToParseDates && ConvertToDateTimeUTC(trimedValue, out var dateTime))
+                var text = value.ToString();
+                if (_tryToParseDates && ConvertToDateTimeUTC(text, out var dateTime))
                 {
                     return dateTime.Value;
                 }
 
-                return trimedValue;
+                return text;
             }
             else if (value is DateOnly date)
             {

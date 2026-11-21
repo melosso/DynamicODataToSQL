@@ -625,6 +625,45 @@ INNER JOIN [Products] AS [Product] ON ([Product].[Id] = [Orders].[ProductId])";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
+        // Test 32
+        {
+            var testName = "Filter+WhitespaceInStringConstants";
+            var tableName = "Products";
+            var tryToParseDates = true;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "Name eq 'Test ' or Name eq ' Test' or Name eq ' ' or Name eq '' or Name eq ' it''s '" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE (((([Products].[Name] = @p0 OR [Products].[Name] = @p1) OR [Products].[Name] = @p2) OR [Products].[Name] = @p3) OR [Products].[Name] = @p4)";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "Test "},
+                {"@p1", " Test"},
+                {"@p2", " "},
+                {"@p3", ""},
+                {"@p4", " it's "},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
+        // Test 33
+        {
+            var testName = "Filter+WhitespaceInFunctionsAndIn";
+            var tableName = "Products";
+            var tryToParseDates = false;
+            var odataQueryParams = new Dictionary<string, string>
+            {
+                {"filter", "contains(Name,' a ') and Type in (' b ', 'c') and Name eq ' 2020-09-08 '" },
+            };
+            var expectedSQL = @"SELECT * FROM [Products] WHERE (([Products].[Name] like @p0 AND [Products].[Type] IN (@p1, @p2)) AND [Products].[Name] = @p3)";
+            var expectedSQLParams = new Dictionary<string, object>
+            {
+                {"@p0", "% a %"},
+                {"@p1", " b "},
+                {"@p2", "c"},
+                {"@p3", " 2020-09-08 "},
+            };
+            yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
+        }
     }
 
     private static ODataToSqlConverter CreateODataToSqlConverter() => new(new TestsEdmModelBuilder(), new SqlServerCompiler() { UseLegacyPagination = false });
