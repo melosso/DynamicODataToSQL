@@ -251,7 +251,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","filter(Amount ge 100)/groupby((Country),aggregate(Amount with sum as Total,Amount with average as AvgAmt))/filter(AvgAmt ge 20)"}
             };
-            var expectedSQL = @"SELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] WHERE [Amount] >= @p0 GROUP BY [Country]) WHERE [AvgAmt] >= @p1";
+            var expectedSQL = @"SELECT * FROM (SELECT [Country], Sum([Amount]) AS [Total], AVG([Amount]) AS [AvgAmt] FROM [Orders] WHERE [Amount] >= @p0 GROUP BY [Country]) AS [apply] WHERE [AvgAmt] >= @p1";
             var expectedSQLParams = new Dictionary<string, object> { { "@p0", 100d }, { "@p1", 20 } };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }
@@ -356,7 +356,7 @@ public class ODataToSqlConverterTests(ITestOutputHelper output)
             {
                 {"apply","compute(year(OrderDate) as yr, month(OrderDate) as mn)/groupby((yr,mn),aggregate(value with average as AvgValue))" }
             };
-            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [Orders]) GROUP BY [yr], [mn]";
+            var expectedSQL = @"SELECT [yr], [mn], AVG([value]) AS [AvgValue] FROM (SELECT *, year([OrderDate]) as yr, month([OrderDate]) as mn FROM [Orders]) AS [apply] GROUP BY [yr], [mn]";
             var expectedSQLParams = new Dictionary<string, object> { };
             yield return new object[] { testName, tableName, tryToParseDates, odataQueryParams, false, expectedSQL, expectedSQLParams };
         }

@@ -47,7 +47,7 @@ public class ApplyClauseBuilder(Compiler compiler, ColumnNameResolver columnName
             if (i > 0 && applyClause.Transformations.ElementAt(i - 1).Kind != TransformationNodeKind.Filter)
             {
                 // Use sub queriy if prev transformation is not filter
-                queryIn = new Query().From(queryIn);
+                queryIn = new Query().From(queryIn, "apply");
             }
 
             switch (node.Kind)
